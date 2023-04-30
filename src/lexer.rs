@@ -1,7 +1,7 @@
 use super::string_table::StrTable;
 
 #[derive(PartialEq, Debug)]
-enum Token {
+pub enum Token {
     Class,
     Else,
     Fi,
@@ -97,9 +97,24 @@ impl Lexer {
         self
     }
     // return (line_number, token) if succeed
-    fn lex(&mut self) -> Option<(usize, Token)> {
+    pub fn lex(&mut self) -> Option<(usize, Token)> {
         loop {
-            if None == self.match_white_space() && None == self.match_comment() {
+            let mut no_space = true;
+            let mut no_comment = true;
+            if let Some((pos, line_number)) = self.match_white_space() {
+                self.pos = pos;
+                self.line_number = line_number;
+                no_space = false;
+            }
+            if let Some((pos, line_number, result)) = self.match_comment() {
+                self.pos = pos;
+                self.line_number = line_number;
+                if let Some(token) = result {
+                    return Some((line_number, token));
+                }
+                no_comment = false;
+            }
+            if no_space && no_comment {
                 break;
             }
         }
@@ -156,7 +171,7 @@ impl Lexer {
     fn match_string(&self) -> Option<(usize, usize, Token)> {
         todo!()
     }
-    fn match_comment(&self) -> Option<(usize, usize, Token)> {
+    fn match_comment(&self) -> Option<(usize, usize, Option<Token>)> {
         todo!()
     }
     fn match_single_char_operator(&self) -> Option<(usize, usize, Token)> {
