@@ -91,8 +91,8 @@ impl Lexer {
             id_table: StrTable::new(),
         }
     }
-    fn set_text(&mut self, text: String) -> &Self {
-        self.text = text;
+    fn set_text(&mut self, text: &str) -> &Self {
+        self.text = text.to_string();
         self.pos = 0;
         self.line_number = 1;
         self
@@ -109,21 +109,12 @@ impl Lexer {
     }
     fn filter_white_space_and_comment(&mut self) -> Option<Token> {
         loop {
-            let mut no_space = true;
-            let mut no_comment = true;
-            if let Some((pos, line_number)) = self.match_white_space() {
-                self.pos = pos;
-                self.line_number = line_number;
-                no_space = false;
-            }
-            if let Some((pos, line_number, result)) = self.match_comment() {
-                self.pos = pos;
-                self.line_number = line_number;
-                if let Some(token) = result {
-                    return Some(token);
-                }
-                no_comment = false;
-            }
+            let no_space = !self.match_white_space();
+            let no_comment = match self.match_comment() {
+                Ok(matched) => !matched,
+                Err(token) => return Some(token),
+            };
+
             if no_space && no_comment {
                 break None;
             }
@@ -164,10 +155,10 @@ impl Lexer {
         }
         let text_char_indices = self.text.char_indices().skip(self.pos);
         for (idx, c) in text_char_indices {
-            if idx == self.pos && (c < '0' || c > '9') {
+            if idx == self.pos && !c.is_ascii_digit() {
                 return None;
             }
-            if c < '0' || c > '9' {
+            if !c.is_ascii_digit() {
                 let id = self.int_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::IntConst(id));
@@ -180,14 +171,14 @@ impl Lexer {
     fn match_type_identifier(&mut self) -> Option<Token> {
         let mut text_char_indices = self.text.char_indices().skip(self.pos);
         if let Some((_, c)) = text_char_indices.next() {
-            if c < 'A' || c > 'Z' {
+            if !c.is_ascii_uppercase() {
                 return None;
             }
         } else {
             return None;
         }
         for (idx, c) in text_char_indices {
-            if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            if !c.is_ascii_alphabetic() {
                 let id = self.id_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::TypeId(id));
@@ -197,17 +188,90 @@ impl Lexer {
         self.pos = self.text.len();
         Some(Token::TypeId(id))
     }
-    fn match_object_identifier(&self) -> Option<Token> {
-        todo!()
+    fn match_object_identifier(&mut self) -> Option<Token> {
+        if self.pos >= self.text.len() {
+            return None;
+        }
+        let text_char_indices = self.text.char_indices().skip(self.pos);
+        for (idx, c) in text_char_indices {
+            if idx == self.pos && !c.is_ascii_lowercase() {
+                return None;
+            }
+            if !c.is_ascii_alphabetic() {
+                let id = self.id_table.insert(&self.text[self.pos..idx]);
+                self.pos = idx;
+                return Some(Token::ObjectId(id));
+            }
+        }
+        let id = self.id_table.insert(&self.text[self.pos..]);
+        self.pos = self.text.len();
+        Some(Token::ObjectId(id))
     }
-    fn match_white_space(&self) -> Option<(usize, usize)> {
-        todo!()
+    // return true when succeed
+    fn match_white_space(&mut self) -> bool {
+        let old_pos = self.pos;
+        let text_chars = self.text.chars().skip(self.pos);
+        for c in text_chars {
+            match c {
+                ' ' | '\t' | '\r' => self.pos += 1,
+                '\n' => {
+                    self.pos += 1;
+                    self.line_number += 1;
+                }
+                _ => break,
+            }
+        }
+        old_pos != self.pos
     }
     fn match_string_const(&mut self) -> Option<Token> {
         todo!()
     }
-    fn match_comment(&self) -> Option<(usize, usize, Option<Token>)> {
-        todo!()
+    // return Ok(true) when matched; Ok(false) when not matched;
+    // Err(token) when comment format error encountered
+    fn match_comment(&mut self) -> Result<bool, Token> {
+        let first_two = match self.text.get(self.pos..(self.pos + 2)) {
+            Some(c) => c,
+            None => return Ok(false),
+        };
+
+        if first_two == "*)" {
+            self.pos += 2;
+            return Err(Token::Error("Unmatched *)".to_string()));
+        }
+        if first_two != "(*" {
+            return Ok(false);
+        }
+
+        let mut text_chars_indices = self.text.char_indices().skip(self.pos + 2).peekable();
+        let mut comment_depth = 1;
+        while let Some((idx, c)) = text_chars_indices.next() {
+            if c == '\n' {
+                self.line_number += 1;
+            } else if c == '*' {
+                let c_next = match text_chars_indices.peek() {
+                    Some((_, c1)) => *c1,
+                    None => break,
+                };
+                if c_next == ')' {
+                    comment_depth -= 1;
+                    if comment_depth == 0 {
+                        self.pos = idx + 2;
+                        return Ok(true);
+                    }
+                }
+            } else if c == '(' {
+                let c_next = match text_chars_indices.peek() {
+                    Some((_, c1)) => *c1,
+                    None => break,
+                };
+                if c_next == '*' {
+                    comment_depth += 1;
+                    text_chars_indices.next();
+                }
+            }
+        }
+        self.pos = self.text.len();
+        Err(Token::Error("EOF in comment".to_string()))
     }
     fn match_single_char_operator(&mut self) -> Option<Token> {
         let mut text_chars = self.text.chars().skip(self.pos);
@@ -308,6 +372,45 @@ impl Lexer {
 mod tests {
     use super::*;
     #[test]
+    fn test_filter_white_space_and_comment() {
+        let mut lexer =
+            Lexer::new("     (*dsfasdf\n\r\tsdf(*(*(*dsfad*)dfasf*)\n\n*)*)      \r\n \r\t");
+        assert_eq!(lexer.filter_white_space_and_comment(), None);
+        assert_eq!(lexer.pos, lexer.text.len());
+        assert_eq!(lexer.line_number, 5);
+    }
+    #[test]
+    fn test_match_comment() {
+        let mut lexer = Lexer::new("(*asfddsf*) (*dsaf(*fdaw*)dfsa\n*)");
+        assert_eq!(lexer.match_comment(), Ok(true));
+        assert_eq!(lexer.pos, 11);
+
+        lexer.pos += 1;
+        assert_eq!(lexer.match_comment(), Ok(true));
+        assert_eq!(lexer.pos, lexer.text.len());
+        assert_eq!(lexer.line_number, 2);
+
+        lexer.set_text("(*dsafsdf");
+        assert_eq!(
+            lexer.match_comment(),
+            Err(Token::Error("EOF in comment".to_string()))
+        );
+        assert_eq!(lexer.pos, lexer.text.len());
+
+        lexer.set_text("*)1234");
+        assert_eq!(
+            lexer.match_comment(),
+            Err(Token::Error("Unmatched *)".to_string()))
+        );
+        assert_eq!(lexer.pos, 2);
+    }
+    #[test]
+    fn test_match_white_space() {
+        let mut lexer = Lexer::new(" \t   \r \n");
+        assert_eq!(lexer.match_white_space(), true);
+        assert_eq!(lexer.pos, lexer.text.len());
+    }
+    #[test]
     fn test_match_int_const() {
         let mut lexer = Lexer::new("14335 098342 34214");
         // match 14335
@@ -367,6 +470,40 @@ mod tests {
 
         // match EOF
         result = lexer.match_type_identifier();
+        assert_eq!(result, None);
+    }
+    #[test]
+    fn test_match_object_identifier() {
+        let mut lexer = Lexer::new("Student apple Fruit test");
+        // match Student
+        let mut result = lexer.match_object_identifier();
+        assert_eq!(result, None);
+
+        // match apple
+        lexer.pos += 8;
+        let mut token = lexer.match_object_identifier().unwrap();
+        if let Token::ObjectId(id) = token {
+            assert_eq!(lexer.id_table.get(id), Some("apple"));
+        } else {
+            panic!("Failed to match object identifier");
+        }
+
+        // match Fruit
+        lexer.pos += 1;
+        result = lexer.match_object_identifier();
+        assert_eq!(result, None);
+
+        // match test
+        lexer.pos += 6;
+        token = lexer.match_object_identifier().unwrap();
+        if let Token::ObjectId(id) = token {
+            assert_eq!(lexer.id_table.get(id), Some("test"));
+        } else {
+            panic!("Failed to match object identifier");
+        }
+
+        // match EOF
+        result = lexer.match_object_identifier();
         assert_eq!(result, None);
     }
     #[test]
