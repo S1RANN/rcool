@@ -5,7 +5,7 @@ pub(crate) struct StrTable {
     index: usize,
 }
 
-trait StringTable {
+pub(crate) trait StringTable {
     fn insert(&mut self, s: &str) -> usize;
     fn get(&self, index: usize) -> Option<&str>;
 }
