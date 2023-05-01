@@ -31,7 +31,6 @@ pub enum Token {
     Le,
     Error(String),
     Plus,
-    Minus,
     Slash,
     Dash,
     Asterisk,
@@ -57,7 +56,7 @@ impl Token {
             '~' => Token::Wave,
             '/' => Token::Slash,
             '+' => Token::Plus,
-            '-' => Token::Minus,
+            '-' => Token::Dash,
             '<' => Token::Less,
             '=' => Token::Equal,
             '{' => Token::LeftBrace,
@@ -67,10 +66,11 @@ impl Token {
             ':' => Token::Colon,
             ';' => Token::SemiColon,
             ',' => Token::Comma,
-            _ => Token::Error(format!("Invalid character {c}")),
+            _ => Token::Error(c.to_string()),
         }
     }
 }
+
 pub struct Lexer {
     text: String,
     pos: usize,
@@ -97,14 +97,64 @@ impl Lexer {
         self.line_number = 1;
         self
     }
+    pub fn print_token(&self, line_number: usize, token: Token) {
+        let token_string = match token {
+            Token::Class => format!("CLASS"),
+            Token::Else => format!("ELSE"),
+            Token::Fi => format!("FI"),
+            Token::If => format!("IF"),
+            Token::In => format!("IN"),
+            Token::Inherits => format!("INHERITS"),
+            Token::Let => format!("LET"),
+            Token::Loop => format!("LOOP"),
+            Token::Pool => format!("POOL"),
+            Token::Then => format!("THEN"),
+            Token::While => format!("WHILE"),
+            Token::Case => format!("CASE"),
+            Token::Esac => format!("ESAC"),
+            Token::Of => format!("OF"),
+            Token::DArrow => format!("DARROW"),
+            Token::New => format!("NEW"),
+            Token::IsVoid => format!("ISVOID"),
+            Token::StrConst(id) => format!("STR_CONST \"{}\"", self.str_table.get(id).unwrap().replace("\n", "\\n")),
+            Token::IntConst(id) => format!("INT_CONST {}", self.int_table.get(id).unwrap()),
+            Token::BoolConst(value) => format!("BOOL_CONST {value}"),
+            Token::TypeId(id) => format!("TYPEID {}", self.id_table.get(id).unwrap()),
+            Token::ObjectId(id) => format!("OBJECTID {}", self.id_table.get(id).unwrap()),
+            Token::Assign => format!("ASSIGN"),
+            Token::Not => format!("NOT"),
+            Token::Le => format!("LE"),
+            Token::Error(e) => format!("ERROR \"{e}\""),
+            Token::Plus => format!("'+'"),
+            Token::Slash => format!("'/'"),
+            Token::Dash => format!("'-'"),
+            Token::Asterisk => format!("'*'"),
+            Token::Equal => format!("'='"),
+            Token::Less => format!("'<'"),
+            Token::Dot => format!("'.'"),
+            Token::Wave => format!("'~'"),
+            Token::Comma => format!("','"),
+            Token::SemiColon => format!("';'"),
+            Token::Colon => format!("':'"),
+            Token::LeftParenthesis => format!("'('"),
+            Token::RightParenthesis => format!("')'"),
+            Token::At => format!("'@'"),
+            Token::LeftBrace => format!("'{{'"),
+            Token::RightBrace => format!("'}}'"),
+        };
+        println!("#{line_number} {token_string}");
+    }
     // return (line_number, token) if succeed
     pub fn lex(&mut self) -> Option<(usize, Token)> {
         self.filter_white_space_and_comment()
             .or_else(|| self.match_all_keywords())
+            .or_else(|| self.match_type_identifier())
+            .or_else(|| self.match_object_identifier())
             .or_else(|| self.match_bool_const())
             .or_else(|| self.match_int_const())
             .or_else(|| self.match_string_const())
             .or_else(|| self.match_operator())
+            .or_else(|| self.catch_unknown_char())
             .map(|token| (self.line_number, token))
     }
     fn filter_white_space_and_comment(&mut self) -> Option<Token> {
@@ -119,6 +169,12 @@ impl Lexer {
                 break None;
             }
         }
+    }
+    fn catch_unknown_char(&mut self) -> Option<Token> {
+        self.text.chars().skip(self.pos).next().map(|c| {
+            self.pos += 1;
+            Token::from_char(c)
+        })
     }
     fn match_all_keywords(&mut self) -> Option<Token> {
         self.match_class()
@@ -137,6 +193,7 @@ impl Lexer {
             .or_else(|| self.match_of())
             .or_else(|| self.match_new())
             .or_else(|| self.match_isvoid())
+            .or_else(|| self.match_not())
     }
     // return (pos, line_number, Token) if succeed
     fn match_keyword(&mut self, word: &str, token: Token) -> Option<Token> {
@@ -178,7 +235,7 @@ impl Lexer {
             return None;
         }
         for (idx, c) in text_char_indices {
-            if !c.is_ascii_alphabetic() {
+            if !c.is_ascii_alphabetic() && c != '_' {
                 let id = self.id_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::TypeId(id));
@@ -189,15 +246,16 @@ impl Lexer {
         Some(Token::TypeId(id))
     }
     fn match_object_identifier(&mut self) -> Option<Token> {
-        if self.pos >= self.text.len() {
-            return None;
-        }
-        let text_char_indices = self.text.char_indices().skip(self.pos);
-        for (idx, c) in text_char_indices {
-            if idx == self.pos && !c.is_ascii_lowercase() {
+        let mut text_char_indices = self.text.char_indices().skip(self.pos);
+        if let Some((_, c)) = text_char_indices.next() {
+            if !c.is_ascii_lowercase() {
                 return None;
             }
-            if !c.is_ascii_alphabetic() {
+        } else {
+            return None;
+        }
+        for (idx, c) in text_char_indices {
+            if !c.is_ascii_alphabetic() && c != '_' {
                 let id = self.id_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::ObjectId(id));
@@ -224,7 +282,76 @@ impl Lexer {
         old_pos != self.pos
     }
     fn match_string_const(&mut self) -> Option<Token> {
-        todo!()
+        let mut text_char_indices = self.text.char_indices().skip(self.pos).peekable();
+
+        if let Some((_, c)) = text_char_indices.next() {
+            if c != '"' {
+                return None;
+            }
+        } else {
+            return None;
+        }
+
+        let mut chars_to_merge: Vec<(usize, char)> = vec![];
+
+        while let Some((idx, c)) = text_char_indices.next() {
+            match c {
+                '\n' => {
+                    self.pos = idx + 1;
+                    return Some(Token::Error("Unterminated string constant".to_string()));
+                }
+                '\0' => {
+                    self.pos = idx + 1;
+                    return Some(Token::Error("String contains null character".to_string()));
+                }
+                '\\' => {
+                    if let Some((_, c_next)) = text_char_indices.peek() {
+                        match c_next {
+                            '\n' => {
+                                self.line_number += 1;
+                                text_char_indices.next();
+                                chars_to_merge.push((idx - self.pos - 1, '\n'));
+                            }
+                            'n' => {
+                                chars_to_merge.push((idx - self.pos - 1, '\n'));
+                                text_char_indices.next();
+                            }
+                            'r' => {
+                                chars_to_merge.push((idx - self.pos - 1, '\r'));
+                                text_char_indices.next();
+                            }
+                            't' => {
+                                chars_to_merge.push((idx - self.pos - 1, '\t'));
+                                text_char_indices.next();
+                            }
+                            _ => {
+                                chars_to_merge.push((idx - self.pos - 1, *c_next));
+                                text_char_indices.next();
+                            }
+                        }
+                    }
+                }
+                '"' => {
+                    let matched_string = match self.text.get((self.pos + 1)..idx) {
+                        Some(matched) => {
+                            let mut matched = matched.to_string();
+                            chars_to_merge.reverse();
+                            for (pos, char) in chars_to_merge.iter() {
+                                matched.replace_range(*pos..=(*pos + 1), char.to_string().as_str());
+                            }
+                            matched
+                        }
+                        None => String::from(""),
+                    };
+                    let id = self.str_table.insert(&matched_string);
+                    self.pos = idx + 1;
+                    return Some(Token::StrConst(id));
+                }
+                _ => {}
+            }
+        }
+        self.pos = self.text.len();
+        Some(Token::Error("EOF in string constant".to_string()))
     }
     // return Ok(true) when matched; Ok(false) when not matched;
     // Err(token) when comment format error encountered
@@ -348,7 +475,7 @@ impl Lexer {
     }
     fn try_match_word_ignore_case(&self, word: &str) -> Option<usize> {
         let mut word_chars = word.chars().peekable();
-        let mut text_chars = self.text.char_indices().skip(self.pos);
+        let text_chars = self.text.char_indices().skip(self.pos);
         for (pos, text_char) in text_chars {
             if let Some(&word_char) = word_chars.peek() {
                 if word_char.eq_ignore_ascii_case(&text_char) {
@@ -372,6 +499,40 @@ impl Lexer {
 mod tests {
     use super::*;
     #[test]
+    fn test_match_string_const() {
+        let mut lexer = Lexer::new("\"some string\"\"\\nthis is \\a string\"\"fasdf");
+        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
+            assert_eq!(lexer.str_table.get(id), Some("some string"));
+            assert_eq!(lexer.pos, 13);
+        } else {
+            panic!("Failed to match string const");
+        }
+
+        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
+            assert_eq!(lexer.str_table.get(id), Some("\nthis is a string"));
+            assert_eq!(lexer.pos, 34);
+        } else {
+            panic!("Failed to match string const");
+        }
+
+        assert_eq!(
+            lexer.match_string_const(),
+            Some(Token::Error("EOF in string constant".to_string()))
+        );
+
+        lexer.set_text("\"asdfsd \\\n\"");
+        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
+            assert_eq!(lexer.str_table.get(id), Some("asdfsd \n"));
+            assert_eq!(lexer.line_number, 2);
+        }
+
+        lexer.set_text("\"asdf\nasdfs");
+        assert_eq!(
+            lexer.match_string_const(),
+            Some(Token::Error("Unterminated string constant".to_string()))
+        );
+    }
+    #[test]
     fn test_filter_white_space_and_comment() {
         let mut lexer =
             Lexer::new("     (*dsfasdf\n\r\tsdf(*(*(*dsfad*)dfasf*)\n\n*)*)      \r\n \r\t");
@@ -391,6 +552,13 @@ mod tests {
         assert_eq!(lexer.line_number, 2);
 
         lexer.set_text("(*dsafsdf");
+        assert_eq!(
+            lexer.match_comment(),
+            Err(Token::Error("EOF in comment".to_string()))
+        );
+        assert_eq!(lexer.pos, lexer.text.len());
+
+        lexer.set_text("(*ds(*af(*sdf*)*)");
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("EOF in comment".to_string()))
@@ -535,7 +703,7 @@ mod tests {
 
         // match -
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::Minus);
+        assert_eq!(token, Token::Dash);
 
         // match <
         token = lexer.match_single_char_operator().unwrap();
