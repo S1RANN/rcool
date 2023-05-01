@@ -91,6 +91,7 @@ impl Lexer {
             id_table: StrTable::new(),
         }
     }
+    #[allow(dead_code)]
     fn set_text(&mut self, text: &str) -> &Self {
         self.text = text.to_string();
         self.pos = 0;
@@ -312,6 +313,7 @@ impl Lexer {
             match c {
                 '\n' => {
                     self.pos = idx + 1;
+                    self.line_number += 1;
                     return Some(Token::Error("Unterminated string constant".to_string()));
                 }
                 '\0' => {
@@ -378,6 +380,15 @@ impl Lexer {
         if first_two == "*)" {
             self.pos += 2;
             return Err(Token::Error("Unmatched *)".to_string()));
+        }
+        if first_two == "--" {
+            if let Some(idx) = self.text.chars().skip(self.pos + 2).position(|c| c == '\n') {
+                self.line_number += 1;
+                self.pos += idx + 3;
+            } else {
+                self.pos = self.text.len();
+            }
+            return Ok(true);
         }
         if first_two != "(*" {
             return Ok(false);
@@ -1040,6 +1051,14 @@ class Main {
             Err(Token::Error("Unmatched *)".to_string()))
         );
         assert_eq!(lexer.pos, 2);
+
+        lexer.set_text("--sdfsdgdgg\n --asdfsdfsfds");
+        assert_eq!(lexer.match_comment(), Ok(true));
+        assert_eq!(lexer.pos, 12);
+
+        lexer.pos += 1;
+        assert_eq!(lexer.match_comment(), Ok(true));
+        assert_eq!(lexer.pos, lexer.text.len());
     }
     #[test]
     fn test_match_white_space() {
