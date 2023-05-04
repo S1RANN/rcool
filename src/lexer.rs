@@ -126,8 +126,8 @@ impl Token {
     }
 }
 
-pub struct Lexer {
-    text: String,
+pub struct Lexer<'a> {
+    text: &'a str,
     pos: usize,
     line_number: usize,
     str_table: StrTable,
@@ -135,10 +135,10 @@ pub struct Lexer {
     id_table: StrTable,
 }
 
-impl Lexer {
-    pub fn new(text: &str) -> Lexer {
+impl<'a> Lexer<'a> {
+    pub fn new(text: &'a str) -> Lexer<'a> {
         Lexer {
-            text: text.to_string(),
+            text,
             pos: 0,
             line_number: 1,
             str_table: StrTable::new(),
@@ -146,27 +146,22 @@ impl Lexer {
             id_table: StrTable::new(),
         }
     }
-    #[allow(dead_code)]
-    fn set_text(&mut self, text: &str) -> &Self {
-        self.text = text.to_string();
-        self.pos = 0;
-        self.line_number = 1;
-        self
-    }
 
     // return (line_number, token) if succeed
-    pub fn lex(&mut self) -> impl Iterator<Item = (usize, Token)> + '_ {
-        std::iter::from_fn(|| {
-            self.filter_white_space_and_comment()
-                .or_else(|| self.match_all_keywords())
-                .or_else(|| self.match_type_identifier())
-                .or_else(|| self.match_object_identifier())
-                .or_else(|| self.match_bool_const())
-                .or_else(|| self.match_int_const())
-                .or_else(|| self.match_string_const())
-                .or_else(|| self.match_operator())
-                .or_else(|| self.catch_unknown_char())
-                .map(|token| (self.line_number, token))
+    pub fn lex(s: &str) -> impl Iterator<Item = (usize, Token)> + '_ {
+        let mut lexer = Lexer::new(s);
+        std::iter::from_fn(move || {
+            lexer
+                .filter_white_space_and_comment()
+                .or_else(|| lexer.match_all_keywords())
+                .or_else(|| lexer.match_type_identifier())
+                .or_else(|| lexer.match_object_identifier())
+                .or_else(|| lexer.match_bool_const())
+                .or_else(|| lexer.match_int_const())
+                .or_else(|| lexer.match_string_const())
+                .or_else(|| lexer.match_operator())
+                .or_else(|| lexer.catch_unknown_char())
+                .map(|token| (lexer.line_number, token))
         })
     }
     fn filter_white_space_and_comment(&mut self) -> Option<Token> {
@@ -533,8 +528,7 @@ mod tests {
     use super::*;
     #[test]
     fn test_lex() {
-        let mut lexer = Lexer::new(
-            r#"(* models one-dimensional cellular automaton on a circle of finite radius
+        let text = r#"(* models one-dimensional cellular automaton on a circle of finite radius
    arrays are faked as Strings,
    X's respresent live cells, dots represent dead cells,
    no error checking is done *)
@@ -631,8 +625,7 @@ class Main {
         }
     };
 };
-"#,
-        );
+"#;
         let correct = r#"#5 CLASS
 #5 TYPEID CellularAutomaton
 #5 INHERITS
@@ -980,7 +973,7 @@ class Main {
 #98 ERROR "EOF in comment"
 "#;
         let mut result = vec![];
-        for (line_number, token) in lexer.lex() {
+        for (line_number, token) in Lexer::lex(text) {
             result.push(format!("#{} {}\n", line_number, token));
         }
         let result = result.concat();
@@ -1008,13 +1001,13 @@ class Main {
             Some(Token::Error("EOF in string constant".to_string()))
         );
 
-        lexer.set_text("\"asdfsd \\\n\"");
+        let mut lexer = Lexer::new("\"asdfsd \\\n\"");
         if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
             assert_eq!(*s, "asdfsd \n");
             assert_eq!(lexer.line_number, 2);
         }
 
-        lexer.set_text("\"asdf\nasdfs");
+        let mut lexer = Lexer::new("\"asdf\nasdfs");
         assert_eq!(
             lexer.match_string_const(),
             Some(Token::Error("Unterminated string constant".to_string()))
@@ -1039,28 +1032,28 @@ class Main {
         assert_eq!(lexer.pos, lexer.text.len());
         assert_eq!(lexer.line_number, 2);
 
-        lexer.set_text("(*dsafsdf");
+        let mut lexer = Lexer::new("(*dsafsdf");
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("EOF in comment".to_string()))
         );
         assert_eq!(lexer.pos, lexer.text.len());
 
-        lexer.set_text("(*ds(*af(*sdf*)*)");
+        let mut lexer = Lexer::new("(*ds(*af(*sdf*)*)");
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("EOF in comment".to_string()))
         );
         assert_eq!(lexer.pos, lexer.text.len());
 
-        lexer.set_text("*)1234");
+        let mut lexer = Lexer::new("*)1234");
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("Unmatched *)".to_string()))
         );
         assert_eq!(lexer.pos, 2);
 
-        lexer.set_text("--sdfsdgdgg\n --asdfsdfsfds");
+        let mut lexer = Lexer::new("--sdfsdgdgg\n --asdfsdfsfds");
         assert_eq!(lexer.match_comment(), Ok(true));
         assert_eq!(lexer.pos, 12);
 
