@@ -1,6 +1,6 @@
-use crate::string_table::StringTable;
+use std::fmt::Display;
 
-use super::string_table::StrTable;
+use crate::string_table::{SharedString, StrTable};
 
 #[derive(PartialEq, Debug)]
 pub enum Token {
@@ -21,11 +21,11 @@ pub enum Token {
     DArrow,
     New,
     IsVoid,
-    StrConst(usize),
-    IntConst(usize),
+    StrConst(SharedString),
+    IntConst(SharedString),
     BoolConst(bool),
-    TypeId(usize),
-    ObjectId(usize),
+    TypeId(SharedString),
+    ObjectId(SharedString),
     Assign,
     Not,
     Le,
@@ -47,6 +47,11 @@ pub enum Token {
     LeftBrace,
     RightBrace,
 }
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
 impl Token {
     fn from_char(c: char) -> Token {
         match c {
@@ -67,6 +72,56 @@ impl Token {
             ';' => Token::SemiColon,
             ',' => Token::Comma,
             _ => Token::Error(c.to_string()),
+        }
+    }
+    #[allow(dead_code)]
+    pub fn to_string(&self) -> String {
+        match self {
+            Token::Class => format!("CLASS"),
+            Token::Else => format!("ELSE"),
+            Token::Fi => format!("FI"),
+            Token::If => format!("IF"),
+            Token::In => format!("IN"),
+            Token::Inherits => format!("INHERITS"),
+            Token::Let => format!("LET"),
+            Token::Loop => format!("LOOP"),
+            Token::Pool => format!("POOL"),
+            Token::Then => format!("THEN"),
+            Token::While => format!("WHILE"),
+            Token::Case => format!("CASE"),
+            Token::Esac => format!("ESAC"),
+            Token::Of => format!("OF"),
+            Token::DArrow => format!("DARROW"),
+            Token::New => format!("NEW"),
+            Token::IsVoid => format!("ISVOID"),
+            Token::StrConst(s) => format!(
+                "STR_CONST \"{}\"",
+                s.replace("\\", "\\\\").replace("\n", "\\n")
+            ),
+            Token::IntConst(s) => format!("INT_CONST {}", **s),
+            Token::BoolConst(value) => format!("BOOL_CONST {value}"),
+            Token::TypeId(s) => format!("TYPEID {}", **s),
+            Token::ObjectId(s) => format!("OBJECTID {}", **s),
+            Token::Assign => format!("ASSIGN"),
+            Token::Not => format!("NOT"),
+            Token::Le => format!("LE"),
+            Token::Error(e) => format!("ERROR \"{e}\""),
+            Token::Plus => format!("'+'"),
+            Token::Slash => format!("'/'"),
+            Token::Dash => format!("'-'"),
+            Token::Asterisk => format!("'*'"),
+            Token::Equal => format!("'='"),
+            Token::Less => format!("'<'"),
+            Token::Dot => format!("'.'"),
+            Token::Wave => format!("'~'"),
+            Token::Comma => format!("','"),
+            Token::SemiColon => format!("';'"),
+            Token::Colon => format!("':'"),
+            Token::LeftParenthesis => format!("'('"),
+            Token::RightParenthesis => format!("')'"),
+            Token::At => format!("'@'"),
+            Token::LeftBrace => format!("'{{'"),
+            Token::RightBrace => format!("'}}'"),
         }
     }
 }
@@ -98,68 +153,21 @@ impl Lexer {
         self.line_number = 1;
         self
     }
-    pub fn token_to_string(&self, line_number: usize, token: Token) -> String {
-        let token_string = match token {
-            Token::Class => format!("CLASS"),
-            Token::Else => format!("ELSE"),
-            Token::Fi => format!("FI"),
-            Token::If => format!("IF"),
-            Token::In => format!("IN"),
-            Token::Inherits => format!("INHERITS"),
-            Token::Let => format!("LET"),
-            Token::Loop => format!("LOOP"),
-            Token::Pool => format!("POOL"),
-            Token::Then => format!("THEN"),
-            Token::While => format!("WHILE"),
-            Token::Case => format!("CASE"),
-            Token::Esac => format!("ESAC"),
-            Token::Of => format!("OF"),
-            Token::DArrow => format!("DARROW"),
-            Token::New => format!("NEW"),
-            Token::IsVoid => format!("ISVOID"),
-            Token::StrConst(id) => format!(
-                "STR_CONST \"{}\"",
-                self.str_table.get(id).unwrap().replace("\n", "\\n")
-            ),
-            Token::IntConst(id) => format!("INT_CONST {}", self.int_table.get(id).unwrap()),
-            Token::BoolConst(value) => format!("BOOL_CONST {value}"),
-            Token::TypeId(id) => format!("TYPEID {}", self.id_table.get(id).unwrap()),
-            Token::ObjectId(id) => format!("OBJECTID {}", self.id_table.get(id).unwrap()),
-            Token::Assign => format!("ASSIGN"),
-            Token::Not => format!("NOT"),
-            Token::Le => format!("LE"),
-            Token::Error(e) => format!("ERROR \"{e}\""),
-            Token::Plus => format!("'+'"),
-            Token::Slash => format!("'/'"),
-            Token::Dash => format!("'-'"),
-            Token::Asterisk => format!("'*'"),
-            Token::Equal => format!("'='"),
-            Token::Less => format!("'<'"),
-            Token::Dot => format!("'.'"),
-            Token::Wave => format!("'~'"),
-            Token::Comma => format!("','"),
-            Token::SemiColon => format!("';'"),
-            Token::Colon => format!("':'"),
-            Token::LeftParenthesis => format!("'('"),
-            Token::RightParenthesis => format!("')'"),
-            Token::At => format!("'@'"),
-            Token::LeftBrace => format!("'{{'"),
-            Token::RightBrace => format!("'}}'"),
-        };
-        format!("#{line_number} {token_string}")
-    }
+
     // return (line_number, token) if succeed
-    pub fn lex(&mut self) -> Option<(usize, Token)> {
-        self.filter_white_space_and_comment()
-            .or_else(|| self.match_all_keywords())
-            .or_else(|| self.match_type_identifier())
-            .or_else(|| self.match_object_identifier())
-            .or_else(|| self.match_bool_const())
-            .or_else(|| self.match_int_const())
-            .or_else(|| self.match_string_const())
-            .or_else(|| self.match_operator())
-            .or_else(|| self.catch_unknown_char())
-            .map(|token| (self.line_number, token))
+    pub fn lex(&mut self) -> impl Iterator<Item = (usize, Token)> + '_ {
+        std::iter::from_fn(|| {
+            self.filter_white_space_and_comment()
+                .or_else(|| self.match_all_keywords())
+                .or_else(|| self.match_type_identifier())
+                .or_else(|| self.match_object_identifier())
+                .or_else(|| self.match_bool_const())
+                .or_else(|| self.match_int_const())
+                .or_else(|| self.match_string_const())
+                .or_else(|| self.match_operator())
+                .or_else(|| self.catch_unknown_char())
+                .map(|token| (self.line_number, token))
+        })
     }
     fn filter_white_space_and_comment(&mut self) -> Option<Token> {
         loop {
@@ -971,25 +979,25 @@ class Main {
 #93 ';'
 #98 ERROR "EOF in comment"
 "#;
-        let mut result = String::new();
-        while let Some((line_number, token)) = lexer.lex() {
-            result.push_str(&lexer.token_to_string(line_number, token));
-            result.push('\n');
+        let mut result = vec![];
+        for (line_number, token) in lexer.lex() {
+            result.push(format!("#{} {}\n", line_number, token));
         }
+        let result = result.concat();
         assert_eq!(result, correct);
     }
     #[test]
     fn test_match_string_const() {
         let mut lexer = Lexer::new("\"some string\"\"\\nthis is \\a string\"\"fasdf");
-        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
-            assert_eq!(lexer.str_table.get(id), Some("some string"));
+        if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
+            assert_eq!(*s, "some string");
             assert_eq!(lexer.pos, 13);
         } else {
             panic!("Failed to match string const");
         }
 
-        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
-            assert_eq!(lexer.str_table.get(id), Some("\nthis is a string"));
+        if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
+            assert_eq!(*s, "\nthis is a string");
             assert_eq!(lexer.pos, 34);
         } else {
             panic!("Failed to match string const");
@@ -1001,8 +1009,8 @@ class Main {
         );
 
         lexer.set_text("\"asdfsd \\\n\"");
-        if let Token::StrConst(id) = lexer.match_string_const().unwrap() {
-            assert_eq!(lexer.str_table.get(id), Some("asdfsd \n"));
+        if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
+            assert_eq!(*s, "asdfsd \n");
             assert_eq!(lexer.line_number, 2);
         }
 
@@ -1071,8 +1079,8 @@ class Main {
         let mut lexer = Lexer::new("14335 098342 34214");
         // match 14335
         let mut token = lexer.match_int_const().unwrap();
-        if let Token::IntConst(id) = token {
-            assert_eq!(lexer.int_table.get(id), Some("14335"));
+        if let Token::IntConst(s) = token {
+            assert_eq!(*s, "14335");
         } else {
             panic!("Failed to lex int constant");
         }
@@ -1080,8 +1088,8 @@ class Main {
         // match 098342
         lexer.pos += 1;
         token = lexer.match_int_const().unwrap();
-        if let Token::IntConst(id) = token {
-            assert_eq!(lexer.int_table.get(id), Some("098342"));
+        if let Token::IntConst(s) = token {
+            assert_eq!(*s, "098342");
         } else {
             panic!("Failed to lex int constant");
         }
@@ -1089,8 +1097,8 @@ class Main {
         // match 34214
         lexer.pos += 1;
         token = lexer.match_int_const().unwrap();
-        if let Token::IntConst(id) = token {
-            assert_eq!(lexer.int_table.get(id), Some("34214"));
+        if let Token::IntConst(s) = token {
+            assert_eq!(*s, "34214");
         } else {
             panic!("Failed to lex int constant");
         }
@@ -1104,8 +1112,8 @@ class Main {
         let mut lexer = Lexer::new("Student apple Fruit");
         // match Student
         let mut token = lexer.match_type_identifier().unwrap();
-        if let Token::TypeId(id) = token {
-            assert_eq!(lexer.id_table.get(id), Some("Student"));
+        if let Token::TypeId(s) = token {
+            assert_eq!(*s, "Student");
         } else {
             panic!("Failed to lex type identifier");
         }
@@ -1118,8 +1126,8 @@ class Main {
         // match Fruit
         lexer.pos += 6;
         token = lexer.match_type_identifier().unwrap();
-        if let Token::TypeId(id) = token {
-            assert_eq!(lexer.id_table.get(id), Some("Fruit"));
+        if let Token::TypeId(s) = token {
+            assert_eq!(*s, "Fruit");
         } else {
             panic!("Failed to lex type identifier");
         }
@@ -1138,8 +1146,8 @@ class Main {
         // match apple
         lexer.pos += 8;
         let mut token = lexer.match_object_identifier().unwrap();
-        if let Token::ObjectId(id) = token {
-            assert_eq!(lexer.id_table.get(id), Some("apple"));
+        if let Token::ObjectId(s) = token {
+            assert_eq!(*s, "apple");
         } else {
             panic!("Failed to match object identifier");
         }
@@ -1152,8 +1160,8 @@ class Main {
         // match test
         lexer.pos += 6;
         token = lexer.match_object_identifier().unwrap();
-        if let Token::ObjectId(id) = token {
-            assert_eq!(lexer.id_table.get(id), Some("test"));
+        if let Token::ObjectId(s) = token {
+            assert_eq!(*s, "test");
         } else {
             panic!("Failed to match object identifier");
         }

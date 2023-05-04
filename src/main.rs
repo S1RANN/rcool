@@ -11,11 +11,13 @@ fn main() -> Result<(), Error> {
         Some(p) => p,
         None => return Err(Error::new(ErrorKind::NotFound, "no input file")),
     };
+    
     let text = read_to_string(path)?;
     let mut lexer = Lexer::new(&text);
 
-    while let Some((line_number, token)) = lexer.lex() {
-        println!("{}", lexer.token_to_string(line_number, token));
+    for (line_number, token) in  lexer.lex() {
+        println!("#{} {}", line_number, token);
     }
+
     Ok(())
 }
