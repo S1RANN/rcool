@@ -874,17 +874,38 @@ mod test {
                 body: Box::new(let_expr),
             },
         ];
-        let class = Class{
+        let class = Class {
             class_type: SharedString::new("TestClass"),
             parent: SharedString::new("IO"),
             features: vec![],
         };
-        let class1 = Class{
+        let class1 = Class {
             class_type: SharedString::new("DummyClass"),
             parent: SharedString::new("Boolean"),
             features,
         };
         let program = Program(vec![class, class1]);
-        eprintln!("{}", program);
+        assert_eq!(
+            "Program: ─┬─Class─┬─class_type: TestClass
+          │       ├─parent: IO
+          │       └─feature: ───[]
+          └─Class─┬─class_type: DummyClass
+                  ├─parent: Boolean
+                  └─feature: ─┬─Feature─┬─ident: name
+                              │         ├─ident_type: String
+                              │         └─init: Assignment─┬─ident: test
+                              │                            └─init: Plus─┬─lhs: ObjectIdent: a
+                              │                                         └─rhs: IntLiteral: 1
+                              └─Feature─┬─ident: to_string
+                                        ├─formals: ─┬─Formal─┬─ident: type
+                                        │           │        └─ident_type: String
+                                        │           └─Formal─┬─ident: num
+                                        │                    └─ident_type: Int
+                                        ├─return_type: Void
+                                        └─body: Let─┬─ident: x
+                                                    ├─ident_type: Double
+                                                    └─do_expr: New───type_ident: Object",
+            format!("{program}")
+        );
     }
 }
