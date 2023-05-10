@@ -49,34 +49,7 @@ pub enum Token {
 }
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-impl Token {
-    fn from_char(c: char) -> Token {
-        match c {
-            '.' => Token::Dot,
-            '*' => Token::Asterisk,
-            '@' => Token::At,
-            '~' => Token::Wave,
-            '/' => Token::Slash,
-            '+' => Token::Plus,
-            '-' => Token::Dash,
-            '<' => Token::Less,
-            '=' => Token::Equal,
-            '{' => Token::LeftBrace,
-            '}' => Token::RightBrace,
-            '(' => Token::LeftParenthesis,
-            ')' => Token::RightParenthesis,
-            ':' => Token::Colon,
-            ';' => Token::SemiColon,
-            ',' => Token::Comma,
-            _ => Token::Error(c.to_string()),
-        }
-    }
-    #[allow(dead_code)]
-    pub fn to_string(&self) -> String {
-        match self {
+        let s = match self {
             Token::Class => format!("CLASS"),
             Token::Else => format!("ELSE"),
             Token::Fi => format!("FI"),
@@ -122,8 +95,34 @@ impl Token {
             Token::At => format!("'@'"),
             Token::LeftBrace => format!("'{{'"),
             Token::RightBrace => format!("'}}'"),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl Token {
+    fn from_char(c: char) -> Token {
+        match c {
+            '.' => Token::Dot,
+            '*' => Token::Asterisk,
+            '@' => Token::At,
+            '~' => Token::Wave,
+            '/' => Token::Slash,
+            '+' => Token::Plus,
+            '-' => Token::Dash,
+            '<' => Token::Less,
+            '=' => Token::Equal,
+            '{' => Token::LeftBrace,
+            '}' => Token::RightBrace,
+            '(' => Token::LeftParenthesis,
+            ')' => Token::RightParenthesis,
+            ':' => Token::Colon,
+            ';' => Token::SemiColon,
+            ',' => Token::Comma,
+            _ => Token::Error(c.to_string()),
         }
     }
+
 }
 
 pub struct Lexer<'a> {
