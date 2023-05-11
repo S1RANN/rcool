@@ -678,7 +678,7 @@ impl TreeFormat for Feature {
 
 impl<T: TreeFormat> TreeFormat for Vec<T> {
     fn tree_fmt(&self) -> Vec<String> {
-        if self.len() == 0 {
+        if self.is_empty() {
             return vec!["───[]".to_string()];
         }
         if self.len() == 1 {

@@ -27,7 +27,7 @@ impl Deref for SharedString {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        &self.0
     }
 }
 impl Display for SharedString{

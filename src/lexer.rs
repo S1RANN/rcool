@@ -50,53 +50,53 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Token::Class => format!("CLASS"),
-            Token::Else => format!("ELSE"),
-            Token::Fi => format!("FI"),
-            Token::If => format!("IF"),
-            Token::In => format!("IN"),
-            Token::Inherits => format!("INHERITS"),
-            Token::Let => format!("LET"),
-            Token::Loop => format!("LOOP"),
-            Token::Pool => format!("POOL"),
-            Token::Then => format!("THEN"),
-            Token::While => format!("WHILE"),
-            Token::Case => format!("CASE"),
-            Token::Esac => format!("ESAC"),
-            Token::Of => format!("OF"),
-            Token::DArrow => format!("DARROW"),
-            Token::New => format!("NEW"),
-            Token::IsVoid => format!("ISVOID"),
+            Token::Class => "CLASS".to_string(),
+            Token::Else => "ELSE".to_string(),
+            Token::Fi => "FI".to_string(),
+            Token::If => "IF".to_string(),
+            Token::In => "IN".to_string(),
+            Token::Inherits => "INHERITS".to_string(),
+            Token::Let => "LET".to_string(),
+            Token::Loop => "LOOP".to_string(),
+            Token::Pool => "POOL".to_string(),
+            Token::Then => "THEN".to_string(),
+            Token::While => "WHILE".to_string(),
+            Token::Case => "CASE".to_string(),
+            Token::Esac => "ESAC".to_string(),
+            Token::Of => "OF".to_string(),
+            Token::DArrow => "DARROW".to_string(),
+            Token::New => "NEW".to_string(),
+            Token::IsVoid => "ISVOID".to_string(),
             Token::StrConst(s) => format!(
                 "STR_CONST \"{}\"",
-                s.replace("\\", "\\\\").replace("\n", "\\n")
+                s.replace('\\', "\\\\").replace('\n', "\\n")
             ),
             Token::IntConst(s) => format!("INT_CONST {}", **s),
             Token::BoolConst(value) => format!("BOOL_CONST {value}"),
             Token::TypeId(s) => format!("TYPEID {}", **s),
             Token::ObjectId(s) => format!("OBJECTID {}", **s),
-            Token::Assign => format!("ASSIGN"),
-            Token::Not => format!("NOT"),
-            Token::Le => format!("LE"),
+            Token::Assign => "ASSIGN".to_string(),
+            Token::Not => "NOT".to_string(),
+            Token::Le => "LE".to_string(),
             Token::Error(e) => format!("ERROR \"{e}\""),
-            Token::Plus => format!("'+'"),
-            Token::Slash => format!("'/'"),
-            Token::Dash => format!("'-'"),
-            Token::Asterisk => format!("'*'"),
-            Token::Equal => format!("'='"),
-            Token::Less => format!("'<'"),
-            Token::Dot => format!("'.'"),
-            Token::Wave => format!("'~'"),
-            Token::Comma => format!("','"),
-            Token::SemiColon => format!("';'"),
-            Token::Colon => format!("':'"),
-            Token::LeftParenthesis => format!("'('"),
-            Token::RightParenthesis => format!("')'"),
-            Token::At => format!("'@'"),
-            Token::LeftBrace => format!("'{{'"),
-            Token::RightBrace => format!("'}}'"),
+            Token::Plus => '+'.to_string(),
+            Token::Slash => '/'.to_string(),
+            Token::Dash => '-'.to_string(),
+            Token::Asterisk => '*'.to_string(),
+            Token::Equal => '='.to_string(),
+            Token::Less => '<'.to_string(),
+            Token::Dot => '.'.to_string(),
+            Token::Wave => '~'.to_string(),
+            Token::Comma => ','.to_string(),
+            Token::SemiColon => ';'.to_string(),
+            Token::Colon => ':'.to_string(),
+            Token::LeftParenthesis => '('.to_string(),
+            Token::RightParenthesis => ')'.to_string(),
+            Token::At => '@'.to_string(),
+            Token::LeftBrace => '{'.to_string(),
+            Token::RightBrace => '}'.to_string(),
         };
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 
@@ -177,7 +177,7 @@ impl<'a> Lexer<'a> {
         }
     }
     fn catch_unknown_char(&mut self) -> Option<Token> {
-        self.text.chars().skip(self.pos).next().map(|c| {
+        self.text.chars().nth(self.pos).map(|c| {
             self.pos += 1;
             Token::from_char(c)
         })
@@ -973,7 +973,7 @@ class Main {
 "#;
         let mut result = vec![];
         for (line_number, token) in Lexer::lex(text) {
-            result.push(format!("#{} {}\n", line_number, token));
+            result.push(format!("#{line_number} {token}\n"));
         }
         let result = result.concat();
         assert_eq!(result, correct);
