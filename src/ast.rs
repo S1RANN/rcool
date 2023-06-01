@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::string_table::SharedString;
 
-enum Expression {
+pub(crate) enum Expression {
     Assignment {
         ident: SharedString,
         init: Box<Expression>,
@@ -15,7 +15,7 @@ enum Expression {
     },
     If {
         condition: Box<Expression>,
-        true_do: Box<Expression>,
+        then_do: Box<Expression>,
         else_do: Box<Expression>,
     },
     While {
@@ -34,7 +34,7 @@ enum Expression {
         branches: Vec<Branch>,
     },
     New(SharedString),
-    IsVoid(SharedString),
+    IsVoid(Box<Expression>),
     Plus(Box<Expression>, Box<Expression>),
     Subtract(Box<Expression>, Box<Expression>),
     Multiply(Box<Expression>, Box<Expression>),
@@ -48,6 +48,23 @@ enum Expression {
     IntLiteral(SharedString),
     StringLiteral(SharedString),
     BoolLiteral(bool),
+}
+
+enum ExpressionPrime {
+    Dispatch {
+        as_type: SharedString,
+        method_ident: SharedString,
+        params: Vec<Expression>,
+        prime: Box<ExpressionPrime>,
+    },
+    Plus(Box<Expression>, Box<ExpressionPrime>),
+    Subtract(Box<Expression>, Box<ExpressionPrime>),
+    Multiply(Box<Expression>, Box<ExpressionPrime>),
+    Divide(Box<Expression>, Box<ExpressionPrime>),
+    Less(Box<Expression>, Box<ExpressionPrime>),
+    LessEqual(Box<Expression>, Box<ExpressionPrime>),
+    Equal(Box<Expression>, Box<ExpressionPrime>),
+    Nil,
 }
 
 trait TreeFormat {
@@ -120,7 +137,7 @@ impl TreeFormat for Expression {
             }
             Expression::If {
                 condition,
-                true_do,
+                then_do,
                 else_do,
             } => {
                 let mut strings: Vec<String> = condition
@@ -137,7 +154,7 @@ impl TreeFormat for Expression {
                     .collect();
 
                 strings.append(
-                    &mut true_do
+                    &mut then_do
                         .tree_fmt()
                         .iter_mut()
                         .enumerate()
@@ -297,7 +314,22 @@ impl TreeFormat for Expression {
                 strings
             }
             Expression::New(type_ident) => vec![format!("New───type_ident: {type_ident}")],
-            Expression::IsVoid(ident) => vec![format!("IsVoid───ident: {ident}")],
+            Expression::IsVoid(expr) => {
+                let mut strings: Vec<String> = expr
+                    .tree_fmt()
+                    .iter_mut()
+                    .enumerate()
+                    .map(|(line_idx, s)| {
+                        if line_idx == 0 {
+                            format!("IsVoid───expr: {s}")
+                        } else {
+                            format!("               {s}")
+                        }
+                    })
+                    .collect();
+
+                strings
+            }
             Expression::Plus(lhs, rhs) => {
                 let mut strings: Vec<String> = lhs
                     .tree_fmt()
@@ -795,38 +827,38 @@ impl TreeFormat for Program {
     }
 }
 
-struct Branch {
-    ident: SharedString,
-    ident_type: SharedString,
-    do_expr: Box<Expression>,
+pub(crate) struct Branch {
+    pub(crate) ident: SharedString,
+    pub(crate) ident_type: SharedString,
+    pub(crate) do_expr: Expression,
 }
 
-struct Formal {
+pub(crate) struct Formal {
     ident: SharedString,
     ident_type: SharedString,
 }
 
-enum Feature {
+pub(crate) enum Feature {
     Attribute {
         ident: SharedString,
         ident_type: SharedString,
-        init: Option<Box<Expression>>,
+        init: Option<Expression>,
     },
     Method {
         ident: SharedString,
         formals: Vec<Formal>,
         return_type: SharedString,
-        body: Box<Expression>,
+        body: Expression,
     },
 }
 
-struct Class {
+pub(crate) struct Class {
     class_type: SharedString,
     parent: SharedString,
     features: Vec<Feature>,
 }
 
-struct Program(Vec<Class>);
+pub(crate) struct Program(Vec<Class>);
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -856,7 +888,7 @@ mod test {
             Feature::Attribute {
                 ident: SharedString::new("name"),
                 ident_type: SharedString::new("String"),
-                init: Some(Box::new(assign_expr)),
+                init: Some(assign_expr),
             },
             Feature::Method {
                 ident: SharedString::new("to_string"),
@@ -871,7 +903,7 @@ mod test {
                     },
                 ],
                 return_type: SharedString::new("Void"),
-                body: Box::new(let_expr),
+                body: let_expr,
             },
         ];
         let class = Class {

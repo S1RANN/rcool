@@ -4,6 +4,7 @@ use std::{
     io::{Error, ErrorKind},
 };
 
+mod parser;
 mod lexer;
 mod string_table;
 mod ast;

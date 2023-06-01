@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::string_table::{SharedString, StrTable};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Token {
     Class,
     Else,
@@ -28,7 +28,7 @@ pub enum Token {
     ObjectId(SharedString),
     Assign,
     Not,
-    Le,
+    LessEqual,
     Error(String),
     Plus,
     Slash,
@@ -46,6 +46,7 @@ pub enum Token {
     At,
     LeftBrace,
     RightBrace,
+    Eof
 }
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -77,7 +78,7 @@ impl Display for Token {
             Token::ObjectId(s) => format!("OBJECTID {}", **s),
             Token::Assign => "ASSIGN".to_string(),
             Token::Not => "NOT".to_string(),
-            Token::Le => "LE".to_string(),
+            Token::LessEqual => "LE".to_string(),
             Token::Error(e) => format!("ERROR \"{e}\""),
             Token::Plus => '+'.to_string(),
             Token::Slash => '/'.to_string(),
@@ -95,6 +96,7 @@ impl Display for Token {
             Token::At => '@'.to_string(),
             Token::LeftBrace => '{'.to_string(),
             Token::RightBrace => '}'.to_string(),
+            Token::Eof => "<EOF>".to_string(),
         };
         write!(f, "{s}")
     }
@@ -443,7 +445,7 @@ impl<'a> Lexer<'a> {
     fn match_multi_char_operator(&mut self) -> Option<Token> {
         self.match_keyword("=>", Token::DArrow)
             .or_else(|| self.match_keyword("<-", Token::Assign))
-            .or_else(|| self.match_keyword("<=", Token::Le))
+            .or_else(|| self.match_keyword("<=", Token::LessEqual))
     }
     fn match_class(&mut self) -> Option<Token> {
         self.match_keyword("class", Token::Class)
@@ -1258,7 +1260,7 @@ class Main {
         // match <=
         lexer.pos += 1;
         token = lexer.match_multi_char_operator().unwrap();
-        assert_eq!(token, Token::Le);
+        assert_eq!(token, Token::LessEqual);
 
         // match <-
         lexer.pos += 1;
