@@ -37,15 +37,15 @@ pub enum Token {
     Equal,
     Less,
     Dot,
-    Wave,
+    Tilde,
     Comma,
     SemiColon,
     Colon,
-    LeftParenthesis,
-    RightParenthesis,
+    LParen,
+    RParen,
     At,
-    LeftBrace,
-    RightBrace,
+    LBrace,
+    RBrace,
     Eof
 }
 impl Display for Token {
@@ -87,15 +87,15 @@ impl Display for Token {
             Token::Equal => '='.to_string(),
             Token::Less => '<'.to_string(),
             Token::Dot => '.'.to_string(),
-            Token::Wave => '~'.to_string(),
+            Token::Tilde => '~'.to_string(),
             Token::Comma => ','.to_string(),
             Token::SemiColon => ';'.to_string(),
             Token::Colon => ':'.to_string(),
-            Token::LeftParenthesis => '('.to_string(),
-            Token::RightParenthesis => ')'.to_string(),
+            Token::LParen => '('.to_string(),
+            Token::RParen => ')'.to_string(),
             Token::At => '@'.to_string(),
-            Token::LeftBrace => '{'.to_string(),
-            Token::RightBrace => '}'.to_string(),
+            Token::LBrace => '{'.to_string(),
+            Token::RBrace => '}'.to_string(),
             Token::Eof => "<EOF>".to_string(),
         };
         write!(f, "{s}")
@@ -108,16 +108,16 @@ impl Token {
             '.' => Token::Dot,
             '*' => Token::Asterisk,
             '@' => Token::At,
-            '~' => Token::Wave,
+            '~' => Token::Tilde,
             '/' => Token::Slash,
             '+' => Token::Plus,
             '-' => Token::Dash,
             '<' => Token::Less,
             '=' => Token::Equal,
-            '{' => Token::LeftBrace,
-            '}' => Token::RightBrace,
-            '(' => Token::LeftParenthesis,
-            ')' => Token::RightParenthesis,
+            '{' => Token::LBrace,
+            '}' => Token::RBrace,
+            '(' => Token::LParen,
+            ')' => Token::RParen,
             ':' => Token::Colon,
             ';' => Token::SemiColon,
             ',' => Token::Comma,
@@ -1181,7 +1181,7 @@ class Main {
 
         // match ~
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::Wave);
+        assert_eq!(token, Token::Tilde);
 
         // match /
         token = lexer.match_single_char_operator().unwrap();
@@ -1205,19 +1205,19 @@ class Main {
 
         // match {
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::LeftBrace);
+        assert_eq!(token, Token::LBrace);
 
         // match }
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::RightBrace);
+        assert_eq!(token, Token::RBrace);
 
         // match (
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::LeftParenthesis);
+        assert_eq!(token, Token::LParen);
 
         // match )
         token = lexer.match_single_char_operator().unwrap();
-        assert_eq!(token, Token::RightParenthesis);
+        assert_eq!(token, Token::RParen);
 
         // match :
         token = lexer.match_single_char_operator().unwrap();

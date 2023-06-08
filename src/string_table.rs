@@ -8,6 +8,11 @@ impl PartialEq for SharedString {
         *self.0 == *other.0
     }
 }
+impl PartialEq<str> for SharedString {
+    fn eq(&self, other: &str) -> bool {
+        self.0.as_str() == other
+    }
+}
 impl Hash for SharedString {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);

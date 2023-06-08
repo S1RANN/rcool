@@ -2,13 +2,14 @@ use std::fmt::Display;
 
 use crate::string_table::SharedString;
 
+#[derive(Debug, PartialEq)]
 pub(crate) enum Expression {
     Assignment {
         ident: SharedString,
         init: Box<Expression>,
     },
     Dispatch {
-        class_ident: Box<Expression>,
+        class_ident: Option<Box<Expression>>,
         as_type: SharedString,
         method_ident: SharedString,
         params: Vec<Expression>,
@@ -100,18 +101,21 @@ impl TreeFormat for Expression {
                 method_ident,
                 params,
             } => {
-                let mut strings: Vec<String> = class_ident
-                    .tree_fmt()
-                    .iter_mut()
-                    .enumerate()
-                    .map(|(line_idx, s)| {
-                        if line_idx == 0 {
-                            format!("Dispatch─┬─class_ident: {s}")
-                        } else {
-                            format!("         │              {s}")
-                        }
-                    })
-                    .collect();
+                let mut strings: Vec<String> = match class_ident {
+                    Some(ident) => ident
+                        .tree_fmt()
+                        .iter_mut()
+                        .enumerate()
+                        .map(|(line_idx, s)| {
+                            if line_idx == 0 {
+                                format!("Dispatch─┬─class_ident: {s}")
+                            } else {
+                                format!("         │              {s}")
+                            }
+                        })
+                        .collect(),
+                    None => vec![format!("Dispatch─┬─class_ident: None")],
+                };
 
                 //                   "Dispatch─┬─class_ident: "
                 strings.push(format!("         ├─as_type: {as_type}"));
@@ -464,9 +468,9 @@ impl TreeFormat for Expression {
                 .enumerate()
                 .map(|(line_idx, s)| {
                     if line_idx == 0 {
-                        format!("Negate───ident: {s}")
+                        format!("Negate───expr: {s}")
                     } else {
-                        format!("                {s}")
+                        format!("               {s}")
                     }
                 })
                 .collect(),
@@ -572,9 +576,9 @@ impl TreeFormat for Expression {
                 .enumerate()
                 .map(|(line_idx, s)| {
                     if line_idx == 0 {
-                        format!("Not───ident: {s}")
+                        format!("Not───expr: {s}")
                     } else {
-                        format!("             {s}")
+                        format!("            {s}")
                     }
                 })
                 .collect(),
@@ -827,6 +831,7 @@ impl TreeFormat for Program {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Branch {
     pub(crate) ident: SharedString,
     pub(crate) ident_type: SharedString,
@@ -861,6 +866,12 @@ pub(crate) struct Class {
 pub(crate) struct Program(Vec<Class>);
 
 impl Display for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.tree_fmt().join("\n"))
+    }
+}
+
+impl Display for Expression{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.tree_fmt().join("\n"))
     }

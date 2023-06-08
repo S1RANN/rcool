@@ -6,44 +6,23 @@ use crate::string_table::SharedString;
 
 struct Parser {
     tokens: Vec<(usize, Token)>,
-    next: usize,
+    pos: usize,
+    self_type: SharedString,
 }
 
 const fn precedence(token: &Token) -> u8 {
     match token {
-        Token::Assign => 1,
-        Token::Not => 2,
-        Token::Less => 3,
-        Token::Equal => 3,
-        Token::LessEqual => 3,
-        Token::Plus => 4,
-        Token::Dash => 4,
-        Token::Asterisk => 5,
-        Token::Slash => 5,
-        Token::IsVoid => 6,
-        Token::Wave => 7,
-        Token::At => 8,
-        Token::Dot => 9,
+        Token::Not => 1,
+        Token::Less => 2,
+        Token::Equal => 2,
+        Token::LessEqual => 2,
+        Token::Plus => 3,
+        Token::Dash => 3,
+        Token::Asterisk => 4,
+        Token::Slash => 4,
+        Token::IsVoid => 5,
+        Token::Tilde => 6,
         _ => panic!("Invalid token"),
-    }
-}
-
-const fn is_operator(token: &Token) -> bool {
-    match token {
-        Token::Plus
-        | Token::Dash
-        | Token::Asterisk
-        | Token::Slash
-        | Token::Less
-        | Token::LessEqual
-        | Token::Equal
-        | Token::Dot
-        | Token::Assign
-        | Token::Not
-        | Token::IsVoid
-        | Token::Wave
-        | Token::At => true,
-        _ => false,
     }
 }
 
@@ -55,20 +34,19 @@ const fn is_binary_op(token: &Token) -> bool {
         | Token::Slash
         | Token::Less
         | Token::LessEqual
-        | Token::Equal
-        | Token::Assign => true,
+        | Token::Equal => true,
         _ => false,
     }
 }
 
-const fn is_right_associative(token: &Token) -> bool {
+const fn is_unary_op(token: &Token) -> bool {
     match token {
-        Token::Assign => true,
+        Token::Tilde | Token::Not | Token::IsVoid => true,
         _ => false,
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ParseError {
     Err,
 }
@@ -85,20 +63,30 @@ impl std::fmt::Display for ParseError {
     }
 }
 
-type Result<T> = std::result::Result<(usize, T), ParseError>;
+type Result<T> = std::result::Result<T, ParseError>;
 
 impl Parser {
     fn new<'a>(token_iter: impl Iterator<Item = (usize, Token)> + 'a) -> Parser {
+        // if tokens contains SELF_TYPE assign it to the self_type field
+        let tokens: Vec<(usize, Token)> = token_iter.collect();
+        let self_type = match tokens.iter().find(|(_, token)| match token {
+            Token::TypeId(t) if t == "SELF_TYPE" => true,
+            _ => false,
+        }) {
+            Some((_, Token::TypeId(t))) => t.clone(),
+            _ => SharedString::new("SELF_TYPE"),
+        };
         Parser {
-            tokens: token_iter.collect(),
-            next: 0,
+            tokens,
+            pos: 0,
+            self_type,
         }
     }
     fn peek(&self) -> &Token {
-        if self.next >= self.tokens.len() {
+        if self.pos >= self.tokens.len() {
             return &Token::Eof;
         }
-        &self.tokens[self.next].1
+        &self.tokens[self.pos].1
     }
     // PROGRAM: [CLASS]+
     fn parse(&mut self) -> Result<Program> {
@@ -128,263 +116,417 @@ impl Parser {
     fn parse_attribute(&mut self) -> Result<Feature> {
         todo!()
     }
-    // PRIMARY: OBJECTID <- EXPRESSION
-    //        | ID([EXPRESSION[, EXPRESSION]*]])
-    //        | if EXPRESSION then EXPRESSION else EXPRESSION fi
-    //        | while EXPRESSION loop EXPRESSION pool
-    //        | { [EXPRESSION;]+}
-    //        | LET_STMT
-    //        | case EXPRESSION of [OBJECTID : TYPEID => EXPRESSION;]+ esac
-    //        | NEW TYPEID
-    //        | (EXPRESSION)
-    //        | OBJECTID
-    //        | INTEGER
-    //        | STRING
-    //        | BOOL
-    // EXPRESSION: OBJECTID <- EXPRESSION
-    //           | EXPRESSION[@TYPE].ID([EXPRESSION[, EXPRESSION]*])
-    //           | ID([EXPRESSION[, EXPRESSION]*]])
-    //           | if EXPRESSION then EXPRESSION else EXPRESSION fi
-    //           | while EXPRESSION loop EXPRESSION pool
-    //           | { [EXPRESSION;]+}
-    //           | LET OBJECTID : TYPEID [ <- EXPRESSION ] ( , OBJECTID : TYPEID [ <- EXPRESSION ] )* IN EXPRESSION
-    //           | case EXPRESSION of [OBJECTID : TYPEID => EXPRESSION;]+ esac
-    //           | NEW TYPEID
-    //           | isvoid EXPRESSION
-    //           | EXPRESSION + EXPRESSION
-    //           | EXPRESSION - EXPRESSION
-    //           | EXPRESSION * EXPRESSION
-    //           | EXPRESSION / EXPRESSION
-    //           | ~ EXPRESSION
-    //           | EXPRESSION < EXPRESSION
-    //           | EXPRESSION <= EXPRESSION
-    //           | EXPRESSION = EXPRESSION
-    //           | not EXPRESSION
-    //           | ( EXPRESSION )
-    //           | OBJECTID
-    //           | INTEGER
-    //           | STRING
-    //           | BOOL
+    /*
+     * A: INTEGER
+     *  | STRING
+     *  | OBJECTID([EXPRESSION(, EXPRESSION)*])
+     *  | OBJECTID
+     *  | BOOL
+     *  | NEW TYPEID
+     *  | ( EXPRESSION )
+     *  | IF EXPRESSION THEN EXPRESSION ELSE EXPRESSION FI
+     *  | WHILE EXPRESSION LOOP EXPRESSION POOL
+     *  | { { EXPRESSION }+ }
+     *  | CASE EXPRESSION OF { OBJECTID : TYPEID => EXPRESSION ; }+
+     *
+     * B: OBJECTID <- EXPRESSION
+     *  | LET OBJECTID : TYPEID [ <- expression ] ( , OBJECTID : TYPEID [ <- expression ] )* IN EXPRESSION
+     *
+     * C: @TYPEID.OBJECTID(EXPRESSION(, EXPRESSION)*) C
+     *  | .OBJECTID(EXPRESSION(, EXPRESSION )*) C
+     *  | @TYPEID.OBJECTID(EXPRESSION(, EXPRESSION)*)
+     *  | .OBJECTID(EXPRESSION(, EXPRESSION )*)
+     *
+     * PRIMARY: B
+     *        | A C
+     *        | A
+     *
+     * EXPRESSION: PRIMARY
+     *           | PRIMARY + EXPRESSION
+     *           | PRIMARY - EXPRESSION
+     *           | PRIMARY * EXPRESSION
+     *           | PRIMARY / EXPRESSION
+     *           | PRIMARY < EXPRESSION
+     *           | PRIMARY <= EXPRESSION
+     *           | PRIMARY = EXPRESSION
+     *           | ~ EXPRESSION
+     *           | not EXPRESSION
+     *           | isvoid EXPRESSION
+     */
     fn parse_expression(&mut self) -> Result<Expression> {
-        todo!()
+        self.parse_associative_expression(0)
+    }
+    fn parse_primary(&mut self) -> Result<Expression> {
+        self.parse_integer()
+            .or_else(|_| self.parse_string())
+            .or_else(|_| self.parse_object_ident())
+            .or_else(|_| self.parse_bool())
+            .or_else(|_| self.parse_new())
+            .or_else(|_| self.parse_parenthesized())
+            .or_else(|_| self.parse_if())
+            .or_else(|_| self.parse_while())
+            .or_else(|_| self.parse_block())
+            .or_else(|_| self.parse_case())
     }
     fn parse_primary_expression(&mut self) -> Result<Expression> {
-        todo!()
+        self.parse_assignment()
+            .or_else(|_| self.parse_let())
+            .or_else(|_| self.parse_dispatch())
+            .or_else(|_| self.parse_primary())
     }
-    fn parse_associative_expression(
-        &mut self,
-        mut lhs: (usize, Expression),
-        min_precedence: u8,
-    ) -> Result<Expression> {
+    fn parse_associative_expression(&mut self, min_precedence: u8) -> Result<Expression> {
+        let save = self.pos;
         let mut lookahead = self.peek().clone();
-        while is_binary_op(&lookahead) && (precedence(&lookahead) >= min_precedence) {
-            let op = lookahead.clone();
-            self.next += 1;
-            let mut rhs = match self.parse_primary_expression() {
-                Ok(result) => result,
-                Err(e) => return Err(e),
-            };
-            lookahead = self.peek().clone();
-            while (is_binary_op(&lookahead) && (precedence(&lookahead) > precedence(&op)))
-                || (is_right_associative(&lookahead) && precedence(&lookahead) == precedence(&op))
-            {
-                let p = if precedence(&lookahead) > precedence(&op) {
-                    precedence(&op) + 1
-                } else {
-                    precedence(&op)
-                };
-                rhs = match self.parse_associative_expression(rhs, p) {
-                    Ok(result) => result,
-                    Err(e) => return Err(e),
-                };
-                lookahead = self.peek().clone();
+        let mut rhs;
+        let mut lhs = if is_unary_op(&lookahead) {
+            self.pos += 1;
+            match self.parse_associative_expression(precedence(&lookahead) + 1) {
+                Ok(result) => match lookahead {
+                    Token::Not => Expression::Not(Box::new(result)),
+                    Token::Tilde => Expression::Negate(Box::new(result)),
+                    Token::IsVoid => Expression::IsVoid(Box::new(result)),
+                    _ => panic!("Invalid token"),
+                },
+                Err(e) => {
+                    self.pos = save;
+                    return Err(e);
+                }
             }
-
-            lhs = match op {
-                Token::Plus => (rhs.0, Expression::Plus(Box::new(lhs.1), Box::new(rhs.1))),
-                Token::Dash => (
-                    rhs.0,
-                    Expression::Subtract(Box::new(lhs.1), Box::new(rhs.1)),
-                ),
-                Token::Asterisk => (
-                    rhs.0,
-                    Expression::Multiply(Box::new(lhs.1), Box::new(rhs.1)),
-                ),
-                Token::Slash => (rhs.0, Expression::Divide(Box::new(lhs.1), Box::new(rhs.1))),
-                Token::Less => (rhs.0, Expression::Less(Box::new(lhs.1), Box::new(rhs.1))),
-                Token::LessEqual => (
-                    rhs.0,
-                    Expression::LessEqual(Box::new(lhs.1), Box::new(rhs.1)),
-                ),
-                Token::Equal => (rhs.0, Expression::Equal(Box::new(lhs.1), Box::new(rhs.1))),
-                Token::Assign => (
-                    rhs.0,
-                    Expression::Assignment {
-                        ident: match lhs.1 {
-                            Expression::ObjectIdent(ident) => ident,
-                            _ => panic!("Invalid expression"),
-                        },
-                        init: Box::new(rhs.1),
-                    },
-                ),
+        } else {
+            match self.parse_primary_expression() {
+                Ok(result) => result,
+                Err(e) => {
+                    self.pos = save;
+                    return Err(e);
+                }
+            }
+        };
+        lookahead = self.peek().clone();
+        while is_binary_op(&lookahead) && (precedence(&lookahead) >= min_precedence) {
+            self.pos += 1;
+            rhs = match self.parse_associative_expression(precedence(&lookahead)) {
+                Ok(result) => result,
+                Err(e) => {
+                    self.pos = save;
+                    return Err(e);
+                }
+            };
+            lhs = match lookahead {
+                Token::Plus => Expression::Plus(Box::new(lhs), Box::new(rhs)),
+                Token::Dash => Expression::Subtract(Box::new(lhs), Box::new(rhs)),
+                Token::Asterisk => Expression::Multiply(Box::new(lhs), Box::new(rhs)),
+                Token::Slash => Expression::Divide(Box::new(lhs), Box::new(rhs)),
+                Token::Less => Expression::Less(Box::new(lhs), Box::new(rhs)),
+                Token::LessEqual => Expression::LessEqual(Box::new(lhs), Box::new(rhs)),
+                Token::Equal => Expression::Equal(Box::new(lhs), Box::new(rhs)),
                 _ => panic!("Invalid token"),
             };
+            lookahead = self.peek().clone();
         }
         Ok(lhs)
     }
     // OBJECTID <- EXPRESSION
     fn parse_assignment(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         let object_ident = self.eat_object_ident().ok_or(ParseError::Err)?;
 
         if let None = self.eat_token(Token::Assign) {
-            self.next = save;
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
-        let (line_number, expr) = match self.parse_expression() {
+        let expr = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
 
-        Ok((
-            line_number,
-            Expression::Assignment {
-                ident: object_ident,
-                init: Box::new(expr),
-            },
-        ))
+        Ok(Expression::Assignment {
+            ident: object_ident,
+            init: Box::new(expr),
+        })
     }
+    // PRIMARY: A C
     fn parse_dispatch(&mut self) -> Result<Expression> {
-        todo!()
-    }
-    // EXPRESSION@TYPE.ID([EXPRESSION[, EXPRESSION]*])
-    fn parse_static_dispatch(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
-        let (_, expr) = match self.parse_primary_expression() {
+        let lhs = match self.parse_primary() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
+
+        let expr = match self.parse_part_dispatch(lhs) {
+            Ok(result) => result,
+            Err(e) => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        Ok(expr)
+    }
+    /* C: @TYPEID.OBJECTID(EXPRESSION(, EXPRESSION)*) C
+     *  | .OBJECTID(EXPRESSION(, EXPRESSION )*) C
+     *  | @TYPEID.OBJECTID(EXPRESSION(, EXPRESSION)*)
+     *  | .OBJECTID(EXPRESSION(, EXPRESSION )*)
+     */
+    fn parse_part_dispatch(
+        &mut self,
+        mut lhs: Expression,
+    ) -> std::result::Result<Expression, Expression> {
+        let expr = match self.peek() {
+            Token::At => {
+                lhs = self.parse_static_dispatch(lhs)?;
+
+                match self.parse_part_dispatch(lhs) {
+                    Ok(result) => result,
+                    Err(e) => e,
+                }
+            }
+            Token::Dot => {
+                lhs = self.parse_dynamic_dispatch(lhs)?;
+
+                match self.parse_part_dispatch(lhs) {
+                    Ok(result) => result,
+                    Err(e) => e,
+                }
+            }
+            _ => return Err(lhs),
+        };
+
+        Ok(expr)
+    }
+    // lhs@TYPE.ID([EXPRESSION[, EXPRESSION]*])
+    fn parse_static_dispatch(
+        &mut self,
+        lhs: Expression,
+    ) -> std::result::Result<Expression, Expression> {
+        let save = self.pos;
 
         if let None = self.eat_token(Token::At) {
-            self.next = save;
-            return Err(ParseError::Err);
+            return Err(lhs);
         }
 
         let (_, as_type) = match self.eat_type_ident() {
             Some(result) => result,
             None => {
-                self.next = save;
-                return Err(ParseError::Err);
+                self.pos = save;
+                return Err(lhs);
             }
         };
 
         if let None = self.eat_token(Token::Dot) {
-            self.next = save;
-            return Err(ParseError::Err);
+            self.pos = save;
+            return Err(lhs);
         }
 
         let method_ident = match self.eat_object_ident() {
-            Some(ident) => ident,
+            Some(result) => result,
             None => {
-                self.next = save;
+                self.pos = save;
+                return Err(lhs);
+            }
+        };
+
+        if let None = self.eat_token(Token::LParen) {
+            self.pos = save;
+            return Err(lhs);
+        }
+
+        let mut params = Vec::new();
+
+        if let None = self.eat_token(Token::RParen) {
+            loop {
+                let expr = match self.parse_expression() {
+                    Ok(result) => result,
+                    Err(e) => {
+                        self.pos = save;
+                        return Err(lhs);
+                    }
+                };
+                params.push(expr);
+                if let None = self.eat_token(Token::Comma) {
+                    break;
+                }
+            }
+            if let None = self.eat_token(Token::RParen) {
+                self.pos = save;
+                return Err(lhs);
+            }
+        }
+
+        Ok(Expression::Dispatch {
+            class_ident: Some(Box::new(lhs)),
+            as_type,
+            method_ident,
+            params,
+        })
+    }
+    // lhs.ID([EXPRESSION[, EXPRESSION]*])
+    fn parse_dynamic_dispatch(
+        &mut self,
+        lhs: Expression,
+    ) -> std::result::Result<Expression, Expression> {
+        let save = self.pos;
+
+        if let None = self.eat_token(Token::Dot) {
+            return Err(lhs);
+        }
+
+        let method_ident = match self.eat_object_ident() {
+            Some(result) => result,
+            None => {
+                self.pos = save;
+                return Err(lhs);
+            }
+        };
+
+        if let None = self.eat_token(Token::LParen) {
+            self.pos = save;
+            return Err(lhs);
+        }
+
+        let mut params = Vec::new();
+
+        if let None = self.eat_token(Token::RParen) {
+            loop {
+                let expr = match self.parse_expression() {
+                    Ok(result) => result,
+                    Err(e) => {
+                        self.pos = save;
+                        return Err(lhs);
+                    }
+                };
+                params.push(expr);
+                if let None = self.eat_token(Token::Comma) {
+                    break;
+                }
+            }
+            if let None = self.eat_token(Token::RParen) {
+                self.pos = save;
+                return Err(lhs);
+            }
+        }
+
+        Ok(Expression::Dispatch {
+            class_ident: Some(Box::new(lhs)),
+            as_type: self.self_type.clone(),
+            method_ident,
+            params,
+        })
+    }
+    // ID([EXPRESSION[, EXPRESSION]*])
+    fn parse_self_dispatch(&mut self) -> Result<Expression> {
+        let save = self.pos;
+
+        let method_ident = match self.eat_object_ident() {
+            Some(result) => result,
+            None => {
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        if let None = self.eat_token(Token::LeftParenthesis) {
-            self.next = save;
+        if let None = self.eat_token(Token::LParen) {
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
         let mut params = Vec::new();
 
-        loop {
-            let (_, arg) = match self.parse_expression() {
-                Ok(result) => result,
-                Err(_) => {
-                    self.next = save;
-                    return Err(ParseError::Err);
+        if let None = self.eat_token(Token::RParen) {
+            loop {
+                let expr = match self.parse_expression() {
+                    Ok(result) => result,
+                    Err(e) => {
+                        self.pos = save;
+                        return Err(e);
+                    }
+                };
+                params.push(expr);
+                if let None = self.eat_token(Token::Comma) {
+                    break;
                 }
-            };
-            params.push(arg);
-
-            if let None = self.eat_token(Token::Comma) {
-                break;
+            }
+            if let None = self.eat_token(Token::RParen) {
+                self.pos = save;
+                return Err(ParseError::Err);
             }
         }
 
-        let Some(line_number) = self.eat_token(Token::RightParenthesis) else {
-            self.next = save;
+        Ok(Expression::Dispatch {
+            class_ident: None,
+            as_type: self.self_type.clone(),
+            method_ident,
+            params,
+        })
+    }
+    fn parse_parenthesized(&mut self) -> Result<Expression> {
+        let save = self.pos;
+
+        if let None = self.eat_token(Token::LParen) {
             return Err(ParseError::Err);
+        }
+
+        let expr = match self.parse_expression() {
+            Ok(result) => result,
+            Err(e) => {
+                self.pos = save;
+                return Err(e);
+            }
         };
 
-        Ok((
-            line_number,
-            Expression::Dispatch {
-                class_ident: Box::new(expr),
-                as_type,
-                method_ident,
-                params,
-            },
-        ))
-    }
-    // EXPRESSION.ID([EXPRESSION[, EXPRESSION]*])
-    fn parse_dynamic_dispatch(&mut self) -> Result<Expression> {
-        let save = self.next;
+        if let None = self.eat_token(Token::RParen) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
 
-        todo!()
-    }
-    // ID([EXPRESSION[, EXPRESSION]*])
-    fn parse_self_dispatch(&mut self) -> Result<Expression> {
-        todo!()
+        Ok(expr)
     }
     // if EXPRESSION then EXPRESSION else EXPRESSION fi
     fn parse_if(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         if let None = self.eat_token(Token::If) {
             return Err(ParseError::Err);
         }
 
-        let (_, condition) = match self.parse_expression() {
+        let condition = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
 
         if let None = self.eat_token(Token::Then) {
-            self.next = save;
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
-        let (_, then_do) = match self.parse_expression() {
+        let then_do = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
 
         if let None = self.eat_token(Token::Else) {
-            self.next = save;
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
-        let (_, else_do) = match self.parse_expression() {
+        let else_do = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
@@ -392,29 +534,26 @@ impl Parser {
         let line_number = match self.eat_token(Token::Fi) {
             Some(n) => n,
             None => {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        Ok((
-            line_number,
-            Expression::If {
-                condition: Box::new(condition),
-                then_do: Box::new(then_do),
-                else_do: Box::new(else_do),
-            },
-        ))
+        Ok(Expression::If {
+            condition: Box::new(condition),
+            then_do: Box::new(then_do),
+            else_do: Box::new(else_do),
+        })
     }
     // while EXPRESSION loop EXPRESSION pool
     fn parse_while(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         if let None = self.eat_token(Token::While) {
             return Err(ParseError::Err);
         }
 
-        let (_, condition) = match self.parse_expression() {
+        let condition = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => return Err(e),
         };
@@ -423,7 +562,7 @@ impl Parser {
             return Err(ParseError::Err);
         }
 
-        let (_, do_expr) = match self.parse_expression() {
+        let do_expr = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => return Err(e),
         };
@@ -431,35 +570,32 @@ impl Parser {
         let line_number = match self.eat_token(Token::Fi) {
             Some(n) => n,
             None => {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        Ok((
-            line_number,
-            Expression::While {
-                condition: Box::new(condition),
-                do_expr: Box::new(do_expr),
-            },
-        ))
+        Ok(Expression::While {
+            condition: Box::new(condition),
+            do_expr: Box::new(do_expr),
+        })
     }
     // { [EXPRESSION;]+}
     fn parse_block(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
-        if let None = self.eat_token(Token::LeftBrace) {
+        if let None = self.eat_token(Token::LBrace) {
             return Err(ParseError::Err);
         }
 
         let mut expressions = Vec::new();
 
         loop {
-            let loop_save = self.next;
-            let (_, expr) = match self.parse_expression() {
+            let loop_save = self.pos;
+            let expr = match self.parse_expression() {
                 Ok(result) => result,
                 Err(_) => {
-                    self.next = loop_save;
+                    self.pos = loop_save;
                     break;
                 }
             };
@@ -471,23 +607,23 @@ impl Parser {
         }
 
         if expressions.len() == 0 {
-            self.next = save;
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
-        let line_number = match self.eat_token(Token::RightBrace) {
+        let line_number = match self.eat_token(Token::RBrace) {
             Some(n) => n,
             None => {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        Ok((line_number, Expression::Block(expressions)))
+        Ok(Expression::Block(expressions))
     }
     // let OBJECTID : TYPE [<- EXPRESSION] [, OBJECTID:TYPE [<- EXPRESSION]]* in EXPRESSION
     fn parse_let(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         if let None = self.eat_token(Token::Let) {
             return Err(ParseError::Err);
@@ -499,29 +635,29 @@ impl Parser {
             let object_ident = match self.eat_object_ident() {
                 Some(ident) => ident,
                 None => {
-                    self.next = save;
+                    self.pos = save;
                     return Err(ParseError::Err);
                 }
             };
 
             if let None = self.eat_token(Token::Colon) {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
 
             let object_type = match self.eat_type_ident() {
                 Some(result) => result,
                 None => {
-                    self.next = save;
+                    self.pos = save;
                     return Err(ParseError::Err);
                 }
             };
 
             let init = match self.eat_token(Token::Assign) {
                 Some(_) => match self.parse_expression() {
-                    Ok(result) => Some(Box::new(result.1)),
+                    Ok(result) => Some(Box::new(result)),
                     Err(e) => {
-                        self.next = save;
+                        self.pos = save;
                         return Err(e);
                     }
                 },
@@ -532,17 +668,17 @@ impl Parser {
 
             if let None = self.eat_token(Token::Comma) {
                 if let None = self.eat_token(Token::In) {
-                    self.next = save;
+                    self.pos = save;
                     return Err(ParseError::Err);
                 }
                 break;
             }
         }
 
-        let (line_number, mut expr) = match self.parse_expression() {
+        let mut expr = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
@@ -556,26 +692,26 @@ impl Parser {
             };
         }
 
-        Ok((line_number, expr))
+        Ok(expr)
     }
     // case EXPRESSION of [OBJECTID:TYPE => EXPRESSION;]+ esac
     fn parse_case(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         if let None = self.eat_token(Token::Case) {
             return Err(ParseError::Err);
         }
 
-        let (_, condition) = match self.parse_expression() {
+        let condition = match self.parse_expression() {
             Ok(result) => result,
             Err(e) => {
-                self.next = save;
+                self.pos = save;
                 return Err(e);
             }
         };
 
         if let None = self.eat_token(Token::Of) {
-            self.next = save;
+            self.pos = save;
             return Err(ParseError::Err);
         }
 
@@ -585,33 +721,33 @@ impl Parser {
             let ident = match self.eat_object_ident() {
                 Some(ident) => ident,
                 None => {
-                    self.next = save;
+                    self.pos = save;
                     return Err(ParseError::Err);
                 }
             };
 
             if let None = self.eat_token(Token::Colon) {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
 
             let (_, ident_type) = match self.eat_type_ident() {
                 Some(result) => result,
                 None => {
-                    self.next = save;
+                    self.pos = save;
                     return Err(ParseError::Err);
                 }
             };
 
             if let None = self.eat_token(Token::DArrow) {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
 
-            let (_, do_expr) = match self.parse_expression() {
+            let do_expr = match self.parse_expression() {
                 Ok(result) => result,
                 Err(e) => {
-                    self.next = save;
+                    self.pos = save;
                     return Err(e);
                 }
             };
@@ -626,22 +762,19 @@ impl Parser {
                 if let Some(line_number) = self.eat_token(Token::Esac) {
                     break line_number;
                 }
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        Ok((
-            line_number,
-            Expression::Case {
-                condition: Box::new(condition),
-                branches,
-            },
-        ))
+        Ok(Expression::Case {
+            condition: Box::new(condition),
+            branches,
+        })
     }
     // new TYPE
     fn parse_new(&mut self) -> Result<Expression> {
-        let save = self.next;
+        let save = self.pos;
 
         if let None = self.eat_token(Token::New) {
             return Err(ParseError::Err);
@@ -650,53 +783,57 @@ impl Parser {
         let (line_number, ident) = match self.eat_type_ident() {
             Some(ident) => ident,
             None => {
-                self.next = save;
+                self.pos = save;
                 return Err(ParseError::Err);
             }
         };
 
-        Ok((line_number, Expression::New(ident)))
+        Ok(Expression::New(ident))
     }
-    // isvoid EXPRESSION
-    fn parse_isvoid(&mut self) -> Result<Expression> {
-        let save = self.next;
-
-        if let None = self.eat_token(Token::IsVoid) {
-            return Err(ParseError::Err);
-        }
-
-        let (line_number, expr) = match self.parse_expression() {
-            Ok(result) => result,
-            Err(e) => {
-                self.next = save;
-                return Err(e);
-            }
-        };
-
-        Ok((line_number, Expression::IsVoid(Box::new(expr))))
-    }
-
     // INTEGER
     fn parse_integer(&mut self) -> Result<Expression> {
-        todo!()
+        if let Some((_, t)) = self.tokens.get(self.pos) {
+            if let Token::IntConst(n) = t {
+                self.pos += 1;
+                return Ok(Expression::IntLiteral(n.clone()));
+            }
+        }
+        Err(ParseError::Err)
     }
     fn parse_string(&mut self) -> Result<Expression> {
-        todo!()
+        if let Some((_, t)) = self.tokens.get(self.pos) {
+            if let Token::StrConst(n) = t {
+                self.pos += 1;
+                return Ok(Expression::StringLiteral(n.clone()));
+            }
+        }
+        Err(ParseError::Err)
     }
     fn parse_bool(&mut self) -> Result<Expression> {
-        todo!()
+        if let Some((_, t)) = self.tokens.get(self.pos) {
+            if let Token::BoolConst(n) = t {
+                self.pos += 1;
+                return Ok(Expression::BoolLiteral(n.clone()));
+            }
+        }
+        Err(ParseError::Err)
+    }
+    fn parse_object_ident(&mut self) -> Result<Expression> {
+        self.eat_object_ident()
+            .map(|ident| Expression::ObjectIdent(ident))
+            .ok_or(ParseError::Err)
     }
     fn eat_token(&mut self, token: Token) -> Option<usize> {
-        if let Some((line_number, t)) = self.tokens.get(self.next) {
+        if let Some((line_number, t)) = self.tokens.get(self.pos) {
             if *t == token {
-                self.next += 1;
+                self.pos += 1;
                 return Some(*line_number);
             }
         }
         None
     }
     fn try_eat_token(&mut self, token: Token) -> bool {
-        if let Some((_, t)) = self.tokens.get(self.next) {
+        if let Some((_, t)) = self.tokens.get(self.pos) {
             if *t == token {
                 return true;
             }
@@ -704,21 +841,36 @@ impl Parser {
         false
     }
     fn eat_object_ident(&mut self) -> Option<SharedString> {
-        if let Some((_, token)) = self.tokens.get(self.next) {
+        if let Some((_, token)) = self.tokens.get(self.pos) {
             if let Token::ObjectId(s) = token {
-                self.next += 1;
+                self.pos += 1;
                 return Some(s.clone());
             }
         }
         None
     }
     fn eat_type_ident(&mut self) -> Option<(usize, SharedString)> {
-        if let Some((line_number, token)) = self.tokens.get(self.next) {
+        if let Some((line_number, token)) = self.tokens.get(self.pos) {
             if let Token::TypeId(s) = token {
-                self.next += 1;
+                self.pos += 1;
                 return Some((*line_number, s.clone()));
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    use crate::lexer::Lexer;
+
+    #[test]
+    fn test_parse_expression(){
+        let text = "Let a: String <- 1 + isvoid 2 in not abc * c <- 5 - ~aa / 4 - 1;sdf";
+        let iter = Lexer::lex(text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_expression();
+        assert_ne!(result, Err(ParseError::Err));
     }
 }
