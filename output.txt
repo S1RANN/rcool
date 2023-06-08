@@ -1,0 +1,334 @@
+(*
+ *  CS164 Fall 94
+ *
+ *  Programming Assignment 1
+ *    Implementation of a simple stack machine.
+ *
+ *  Skeleton file
+ *)
+
+class Main{
+    io: IO <- new IO;
+
+    main(): Int{
+        (new Reader).run(io)
+    };
+};
+
+class Reader{
+    list: List <- new List;
+
+    run(io: IO): Int{
+        let flag: Bool <- true in {
+            while flag loop
+                {
+                    io.out_string(">");
+                    let str: String <- io.in_string() in {
+                        if str = "d" then
+                            list.print(io)
+                        else if str = "e" then
+                            evaluate()
+                        else if str = "x" then
+                            flag <- false
+                        else
+                            list <- list.cons(str)
+                        fi fi fi;
+                    };
+                }
+            pool;
+            0;
+        }
+    };
+
+    evaluate(): Int {
+        {
+            if list.get_item() = "+" then
+                let str2int: A2I <- new A2I,
+                    a: Int <- str2int.a2i(list.get_next().get_item()),
+                    b: Int <- str2int.a2i(list.get_next().get_next().get_item()) in {
+                        list <- list.get_next().get_next().get_next().cons(str2int.i2a(a + b));
+                }
+            else if list.get_item() = "s" then
+                let tmp: String <- list.get_next().get_item() in {
+                    list.get_next().set_item(list.get_next().get_next().get_item());
+                    list.get_next().get_next().set_item(tmp);
+                    list <- list.get_next();
+                }
+            else 0
+            fi fi;
+            0;
+        }
+    };
+};
+
+class List{
+    item: String;
+    next: List;
+
+    is_nil(): Bool { true };
+
+    get_item(): String { item };
+
+    get_next(): List { next };
+
+    set_item(in_item: String): String { item <- in_item };
+    
+    init(str: String, rest: List): List{
+        {
+            item <- str;
+            next <- rest;
+            self;
+        }
+    };
+
+    cons(str: String): List{
+        (new Cons).init(str, self)
+    };
+
+    print(io: IO): Int{
+        if not is_nil() then
+            {
+                io.out_string(item);
+                io.out_string("\n");
+                next.print(io);
+            }
+        else 
+            0
+        fi
+    };
+};
+
+class Cons inherits List{
+    is_nil(): Bool { false };
+};
+Program: ─┬─Class─┬─name: Main
+          │       ├─parent: Object
+          │       └─feature: ─┬─Feature─┬─ident: io
+          │                   │         ├─ident_type: IO
+          │                   │         └─init: New───type_ident: IO
+          │                   └─Feature─┬─ident: main
+          │                             ├─formals: ───[]
+          │                             ├─return_type: Int
+          │                             └─body: Dispatch─┬─class_ident: New───type_ident: Reader
+          │                                              ├─as_type: SELF_TYPE
+          │                                              ├─method_ident: run
+          │                                              └─params: ───ObjectIdent: io
+          ├─Class─┬─name: Reader
+          │       ├─parent: Object
+          │       └─feature: ─┬─Feature─┬─ident: list
+          │                   │         ├─ident_type: List
+          │                   │         └─init: New───type_ident: List
+          │                   ├─Feature─┬─ident: run
+          │                   │         ├─formals: ───Formal─┬─ident: io
+          │                   │         │                    └─ident_type: IO
+          │                   │         ├─return_type: Int
+          │                   │         └─body: Let─┬─ident: flag
+          │                   │                     ├─ident_type: Bool
+          │                   │                     ├─init: BoolLiteral: true
+          │                   │                     └─do_expr: Block: ─┬─While─┬─condition: ObjectIdent: flag
+          │                   │                                        │       └─do_expr: Block: ─┬─Dispatch─┬─class_ident: ObjectIdent: io
+          │                   │                                        │                          │          ├─as_type: SELF_TYPE
+          │                   │                                        │                          │          ├─method_ident: out_string
+          │                   │                                        │                          │          └─params: ───StringLiteral: ">"
+          │                   │                                        │                          └─Let─┬─ident: str
+          │                   │                                        │                                ├─ident_type: String
+          │                   │                                        │                                ├─init: Dispatch─┬─class_ident: ObjectIdent: io
+          │                   │                                        │                                │                ├─as_type: SELF_TYPE
+          │                   │                                        │                                │                ├─method_ident: in_string
+          │                   │                                        │                                │                └─params: ───[]
+          │                   │                                        │                                └─do_expr: Block: ───If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+          │                   │                                        │                                                        │                  └─rhs: StringLiteral: "d"
+          │                   │                                        │                                                        ├─true_do: Dispatch─┬─class_ident: ObjectIdent: list
+          │                   │                                        │                                                        │                   ├─as_type: SELF_TYPE
+          │                   │                                        │                                                        │                   ├─method_ident: print
+          │                   │                                        │                                                        │                   └─params: ───ObjectIdent: io
+          │                   │                                        │                                                        └─else_do: If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+          │                   │                                        │                                                                      │                  └─rhs: StringLiteral: "e"
+          │                   │                                        │                                                                      ├─true_do: Dispatch─┬─class_ident: None
+          │                   │                                        │                                                                      │                   ├─as_type: SELF_TYPE
+          │                   │                                        │                                                                      │                   ├─method_ident: evaluate
+          │                   │                                        │                                                                      │                   └─params: ───[]
+          │                   │                                        │                                                                      └─else_do: If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+          │                   │                                        │                                                                                    │                  └─rhs: StringLiteral: "x"
+          │                   │                                        │                                                                                    ├─true_do: Assignment─┬─ident: flag
+          │                   │                                        │                                                                                    │                     └─init: BoolLiteral: false
+          │                   │                                        │                                                                                    └─else_do: Assignment─┬─ident: list
+          │                   │                                        │                                                                                                          └─init: Dispatch─┬─class_ident: ObjectIdent: list
+          │                   │                                        │                                                                                                                           ├─as_type: SELF_TYPE
+          │                   │                                        │                                                                                                                           ├─method_ident: cons
+          │                   │                                        │                                                                                                                           └─params: ───ObjectIdent: str
+          │                   │                                        └─IntLiteral: 0
+          │                   └─Feature─┬─ident: evaluate
+          │                             ├─formals: ───[]
+          │                             ├─return_type: Int
+          │                             └─body: Block: ─┬─If─┬─condition: Equal─┬─lhs: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │    │                  │               ├─as_type: SELF_TYPE
+          │                                             │    │                  │               ├─method_ident: get_item
+          │                                             │    │                  │               └─params: ───[]
+          │                                             │    │                  └─rhs: StringLiteral: "+"
+          │                                             │    ├─true_do: Let─┬─ident: str2int
+          │                                             │    │              ├─ident_type: A2I
+          │                                             │    │              ├─init: New───type_ident: A2I
+          │                                             │    │              └─do_expr: Let─┬─ident: a
+          │                                             │    │                             ├─ident_type: Int
+          │                                             │    │                             ├─init: Dispatch─┬─class_ident: ObjectIdent: str2int
+          │                                             │    │                             │                ├─as_type: SELF_TYPE
+          │                                             │    │                             │                ├─method_ident: a2i
+          │                                             │    │                             │                └─params: ───Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │    │                             │                                      │                       ├─as_type: SELF_TYPE
+          │                                             │    │                             │                                      │                       ├─method_ident: get_next
+          │                                             │    │                             │                                      │                       └─params: ───[]
+          │                                             │    │                             │                                      ├─as_type: SELF_TYPE
+          │                                             │    │                             │                                      ├─method_ident: get_item
+          │                                             │    │                             │                                      └─params: ───[]
+          │                                             │    │                             └─do_expr: Let─┬─ident: b
+          │                                             │    │                                            ├─ident_type: Int
+          │                                             │    │                                            ├─init: Dispatch─┬─class_ident: ObjectIdent: str2int
+          │                                             │    │                                            │                ├─as_type: SELF_TYPE
+          │                                             │    │                                            │                ├─method_ident: a2i
+          │                                             │    │                                            │                └─params: ───Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │    │                                            │                                      │                       │                       ├─as_type: SELF_TYPE
+          │                                             │    │                                            │                                      │                       │                       ├─method_ident: get_next
+          │                                             │    │                                            │                                      │                       │                       └─params: ───[]
+          │                                             │    │                                            │                                      │                       ├─as_type: SELF_TYPE
+          │                                             │    │                                            │                                      │                       ├─method_ident: get_next
+          │                                             │    │                                            │                                      │                       └─params: ───[]
+          │                                             │    │                                            │                                      ├─as_type: SELF_TYPE
+          │                                             │    │                                            │                                      ├─method_ident: get_item
+          │                                             │    │                                            │                                      └─params: ───[]
+          │                                             │    │                                            └─do_expr: Block: ───Assignment─┬─ident: list
+          │                                             │    │                                                                            └─init: Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │    │                                                                                             │                       │                       │                       ├─as_type: SELF_TYPE
+          │                                             │    │                                                                                             │                       │                       │                       ├─method_ident: get_next
+          │                                             │    │                                                                                             │                       │                       │                       └─params: ───[]
+          │                                             │    │                                                                                             │                       │                       ├─as_type: SELF_TYPE
+          │                                             │    │                                                                                             │                       │                       ├─method_ident: get_next
+          │                                             │    │                                                                                             │                       │                       └─params: ───[]
+          │                                             │    │                                                                                             │                       ├─as_type: SELF_TYPE
+          │                                             │    │                                                                                             │                       ├─method_ident: get_next
+          │                                             │    │                                                                                             │                       └─params: ───[]
+          │                                             │    │                                                                                             ├─as_type: SELF_TYPE
+          │                                             │    │                                                                                             ├─method_ident: cons
+          │                                             │    │                                                                                             └─params: ───Dispatch─┬─class_ident: ObjectIdent: str2int
+          │                                             │    │                                                                                                                   ├─as_type: SELF_TYPE
+          │                                             │    │                                                                                                                   ├─method_ident: i2a
+          │                                             │    │                                                                                                                   └─params: ───Plus─┬─lhs: ObjectIdent: a
+          │                                             │    │                                                                                                                                     └─rhs: ObjectIdent: b
+          │                                             │    └─else_do: If─┬─condition: Equal─┬─lhs: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │                  │               ├─as_type: SELF_TYPE
+          │                                             │                  │                  │               ├─method_ident: get_item
+          │                                             │                  │                  │               └─params: ───[]
+          │                                             │                  │                  └─rhs: StringLiteral: "s"
+          │                                             │                  ├─true_do: Let─┬─ident: tmp
+          │                                             │                  │              ├─ident_type: String
+          │                                             │                  │              ├─init: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │              │                │                       ├─as_type: SELF_TYPE
+          │                                             │                  │              │                │                       ├─method_ident: get_next
+          │                                             │                  │              │                │                       └─params: ───[]
+          │                                             │                  │              │                ├─as_type: SELF_TYPE
+          │                                             │                  │              │                ├─method_ident: get_item
+          │                                             │                  │              │                └─params: ───[]
+          │                                             │                  │              └─do_expr: Block: ─┬─Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │                                 │          │                       ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │          │                       ├─method_ident: get_next
+          │                                             │                  │                                 │          │                       └─params: ───[]
+          │                                             │                  │                                 │          ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │          ├─method_ident: set_item
+          │                                             │                  │                                 │          └─params: ───Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │                                 │                                │                       │                       ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │                                │                       │                       ├─method_ident: get_next
+          │                                             │                  │                                 │                                │                       │                       └─params: ───[]
+          │                                             │                  │                                 │                                │                       ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │                                │                       ├─method_ident: get_next
+          │                                             │                  │                                 │                                │                       └─params: ───[]
+          │                                             │                  │                                 │                                ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │                                ├─method_ident: get_item
+          │                                             │                  │                                 │                                └─params: ───[]
+          │                                             │                  │                                 ├─Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │                                 │          │                       │                       ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │          │                       │                       ├─method_ident: get_next
+          │                                             │                  │                                 │          │                       │                       └─params: ───[]
+          │                                             │                  │                                 │          │                       ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │          │                       ├─method_ident: get_next
+          │                                             │                  │                                 │          │                       └─params: ───[]
+          │                                             │                  │                                 │          ├─as_type: SELF_TYPE
+          │                                             │                  │                                 │          ├─method_ident: set_item
+          │                                             │                  │                                 │          └─params: ───ObjectIdent: tmp
+          │                                             │                  │                                 └─Assignment─┬─ident: list
+          │                                             │                  │                                              └─init: Dispatch─┬─class_ident: ObjectIdent: list
+          │                                             │                  │                                                               ├─as_type: SELF_TYPE
+          │                                             │                  │                                                               ├─method_ident: get_next
+          │                                             │                  │                                                               └─params: ───[]
+          │                                             │                  └─else_do: IntLiteral: 0
+          │                                             └─IntLiteral: 0
+          ├─Class─┬─name: List
+          │       ├─parent: Object
+          │       └─feature: ─┬─Feature─┬─ident: item
+          │                   │         └─ident_type: String
+          │                   ├─Feature─┬─ident: next
+          │                   │         └─ident_type: List
+          │                   ├─Feature─┬─ident: is_nil
+          │                   │         ├─formals: ───[]
+          │                   │         ├─return_type: Bool
+          │                   │         └─body: BoolLiteral: true
+          │                   ├─Feature─┬─ident: get_item
+          │                   │         ├─formals: ───[]
+          │                   │         ├─return_type: String
+          │                   │         └─body: ObjectIdent: item
+          │                   ├─Feature─┬─ident: get_next
+          │                   │         ├─formals: ───[]
+          │                   │         ├─return_type: List
+          │                   │         └─body: ObjectIdent: next
+          │                   ├─Feature─┬─ident: set_item
+          │                   │         ├─formals: ───Formal─┬─ident: in_item
+          │                   │         │                    └─ident_type: String
+          │                   │         ├─return_type: String
+          │                   │         └─body: Assignment─┬─ident: item
+          │                   │                            └─init: ObjectIdent: in_item
+          │                   ├─Feature─┬─ident: init
+          │                   │         ├─formals: ─┬─Formal─┬─ident: str
+          │                   │         │           │        └─ident_type: String
+          │                   │         │           └─Formal─┬─ident: rest
+          │                   │         │                    └─ident_type: List
+          │                   │         ├─return_type: List
+          │                   │         └─body: Block: ─┬─Assignment─┬─ident: item
+          │                   │                         │            └─init: ObjectIdent: str
+          │                   │                         ├─Assignment─┬─ident: next
+          │                   │                         │            └─init: ObjectIdent: rest
+          │                   │                         └─ObjectIdent: self
+          │                   ├─Feature─┬─ident: cons
+          │                   │         ├─formals: ───Formal─┬─ident: str
+          │                   │         │                    └─ident_type: String
+          │                   │         ├─return_type: List
+          │                   │         └─body: Dispatch─┬─class_ident: New───type_ident: Cons
+          │                   │                          ├─as_type: SELF_TYPE
+          │                   │                          ├─method_ident: init
+          │                   │                          └─params: ─┬─ObjectIdent: str
+          │                   │                                     └─ObjectIdent: self
+          │                   └─Feature─┬─ident: print
+          │                             ├─formals: ───Formal─┬─ident: io
+          │                             │                    └─ident_type: IO
+          │                             ├─return_type: Int
+          │                             └─body: If─┬─condition: Not───expr: Dispatch─┬─class_ident: None
+          │                                        │                                 ├─as_type: SELF_TYPE
+          │                                        │                                 ├─method_ident: is_nil
+          │                                        │                                 └─params: ───[]
+          │                                        ├─true_do: Block: ─┬─Dispatch─┬─class_ident: ObjectIdent: io
+          │                                        │                  │          ├─as_type: SELF_TYPE
+          │                                        │                  │          ├─method_ident: out_string
+          │                                        │                  │          └─params: ───ObjectIdent: item
+          │                                        │                  ├─Dispatch─┬─class_ident: ObjectIdent: io
+          │                                        │                  │          ├─as_type: SELF_TYPE
+          │                                        │                  │          ├─method_ident: out_string
+          │                                        │                  │          └─params: ───StringLiteral: "\n"
+          │                                        │                  └─Dispatch─┬─class_ident: ObjectIdent: next
+          │                                        │                             ├─as_type: SELF_TYPE
+          │                                        │                             ├─method_ident: print
+          │                                        │                             └─params: ───ObjectIdent: io
+          │                                        └─else_do: IntLiteral: 0
+          └─Class─┬─name: Cons
+                  ├─parent: List
+                  └─feature: ───Feature─┬─ident: is_nil
+                                        ├─formals: ───[]
+                                        ├─return_type: Bool
+                                        └─body: BoolLiteral: false

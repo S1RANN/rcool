@@ -80,22 +80,22 @@ impl Display for Token {
             Token::Not => "NOT".to_string(),
             Token::LessEqual => "LE".to_string(),
             Token::Error(e) => format!("ERROR \"{e}\""),
-            Token::Plus => '+'.to_string(),
-            Token::Slash => '/'.to_string(),
-            Token::Dash => '-'.to_string(),
-            Token::Asterisk => '*'.to_string(),
-            Token::Equal => '='.to_string(),
-            Token::Less => '<'.to_string(),
-            Token::Dot => '.'.to_string(),
-            Token::Tilde => '~'.to_string(),
-            Token::Comma => ','.to_string(),
-            Token::SemiColon => ';'.to_string(),
-            Token::Colon => ':'.to_string(),
-            Token::LParen => '('.to_string(),
-            Token::RParen => ')'.to_string(),
-            Token::At => '@'.to_string(),
-            Token::LBrace => '{'.to_string(),
-            Token::RBrace => '}'.to_string(),
+            Token::Plus => "'+'".to_string(),
+            Token::Slash => "'/'".to_string(),
+            Token::Dash => "'-'".to_string(),
+            Token::Asterisk => "'*'".to_string(),
+            Token::Equal => "'='".to_string(),
+            Token::Less => "'<'".to_string(),
+            Token::Dot => "'.'".to_string(),
+            Token::Tilde => "'~'".to_string(),
+            Token::Comma => "','".to_string(),
+            Token::SemiColon => "';'".to_string(),
+            Token::Colon => "':'".to_string(),
+            Token::LParen => "'('".to_string(),
+            Token::RParen => "')'".to_string(),
+            Token::At => "'@'".to_string(),
+            Token::LBrace => "'{'".to_string(),
+            Token::RBrace => "'}'".to_string(),
             Token::Eof => "<EOF>".to_string(),
         };
         write!(f, "{s}")
@@ -155,9 +155,9 @@ impl<'a> Lexer<'a> {
             lexer
                 .filter_white_space_and_comment()
                 .or_else(|| lexer.match_all_keywords())
+                .or_else(|| lexer.match_bool_const())
                 .or_else(|| lexer.match_type_identifier())
                 .or_else(|| lexer.match_object_identifier())
-                .or_else(|| lexer.match_bool_const())
                 .or_else(|| lexer.match_int_const())
                 .or_else(|| lexer.match_string_const())
                 .or_else(|| lexer.match_operator())
@@ -254,7 +254,7 @@ impl<'a> Lexer<'a> {
             return None;
         }
         for (idx, c) in text_char_indices {
-            if !c.is_ascii_alphabetic() && c != '_' {
+            if !c.is_ascii_alphanumeric() && c != '_' {
                 let id = self.id_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::TypeId(id));
@@ -274,7 +274,7 @@ impl<'a> Lexer<'a> {
             return None;
         }
         for (idx, c) in text_char_indices {
-            if !c.is_ascii_alphabetic() && c != '_' {
+            if !c.is_ascii_alphanumeric()&& c != '_' {
                 let id = self.id_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::ObjectId(id));

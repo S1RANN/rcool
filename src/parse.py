@@ -120,7 +120,7 @@ class Parser:
         lookahead = self.peek()
         while lookahead.is_binary() and lookahead.precedence() >= min_precedence:
             op = self.advance()
-            rhs = self.parse_expr(op.precedence())
+            rhs = self.parse_expr(op.precedence() + 1)
             lhs = BinaryExpr(lhs, op.value, rhs)
             lookahead = self.peek()
         return lhs

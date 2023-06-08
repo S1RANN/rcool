@@ -8,6 +8,7 @@ struct Parser {
     tokens: Vec<(usize, Token)>,
     pos: usize,
     self_type: SharedString,
+    object_type: SharedString,
 }
 
 const fn precedence(token: &Token) -> u8 {
@@ -76,10 +77,18 @@ impl Parser {
             Some((_, Token::TypeId(t))) => t.clone(),
             _ => SharedString::new("SELF_TYPE"),
         };
+        let object_type = match tokens.iter().find(|(_, token)| match token {
+            Token::TypeId(t) if t == "Object" => true,
+            _ => false,
+        }) {
+            Some((_, Token::TypeId(t))) => t.clone(),
+            _ => SharedString::new("Object"),
+        };
         Parser {
             tokens,
             pos: 0,
             self_type,
+            object_type,
         }
     }
     fn peek(&self) -> &Token {
@@ -90,31 +99,218 @@ impl Parser {
     }
     // PROGRAM: [CLASS]+
     fn parse(&mut self) -> Result<Program> {
-        todo!()
+        let mut classes = Vec::new();
+        loop {
+            match self.parse_class() {
+                Ok(c) => classes.push(c),
+                Err(_) => break,
+            }
+        }
+
+        if self.pos != self.tokens.len() {
+            return Err(ParseError::Err);
+        }
+
+        Ok(Program(classes))
     }
     // CLASS: class TYPEID [inherits TYPEID] { [FEATURE]* } ;
     fn parse_class(&mut self) -> Result<Class> {
-        todo!()
+        let save = self.pos;
+
+        if let None = self.eat_token(Token::Class) {
+            return Err(ParseError::Err);
+        }
+
+        let name = match self.eat_type_ident() {
+            Some((_, t)) => t,
+            None => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        let parent = match self.eat_token(Token::Inherits) {
+            Some(_) => match self.eat_type_ident() {
+                Some((_, t)) => t,
+                None => {
+                    self.pos = save;
+                    return Err(ParseError::Err);
+                }
+            },
+            None => self.object_type.clone(),
+        };
+
+        if let None = self.eat_token(Token::LBrace) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let mut features = Vec::new();
+
+        loop {
+            match self.parse_feature() {
+                Ok(f) => features.push(f),
+                Err(_) => break,
+            }
+        }
+
+        if let None = self.eat_token(Token::RBrace) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        if let None = self.eat_token(Token::SemiColon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        Ok(Class {
+            name,
+            parent,
+            features,
+        })
     }
     // FEATURE: METHOD | ATTRIBUTE
     fn parse_feature(&mut self) -> Result<Feature> {
-        todo!()
+        self.parse_method().or_else(|_| self.parse_attribute())
     }
-    // METHOD: OBJECTID ( [formal_list] ) : TYPEID { EXPRESSION } ;
+    // METHOD: OBJECTID ( [formal [, formal]*] ) : TYPEID { EXPRESSION } ;
     fn parse_method(&mut self) -> Result<Feature> {
-        todo!()
-    }
-    // FORMAL_LIST: [formal ( , [formal] )*]
-    fn parse_formal_list(&mut self) -> Result<Vec<Formal>> {
-        todo!()
+        let save = self.pos;
+
+        let ident = self.eat_object_ident().ok_or(ParseError::Err)?;
+
+        if let None = self.eat_token(Token::LParen) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let mut formals = Vec::new();
+
+        if let None = self.eat_token(Token::RParen) {
+            loop {
+                match self.parse_formal() {
+                    Ok(f) => formals.push(f),
+                    Err(_) => {
+                        self.pos = save;
+                        return Err(ParseError::Err);
+                    }
+                }
+                if let None = self.eat_token(Token::Comma) {
+                    break;
+                }
+            }
+            if let None = self.eat_token(Token::RParen) {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        }
+
+        if let None = self.eat_token(Token::Colon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let return_type = match self.eat_type_ident() {
+            Some((_, t)) => t,
+            None => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        if let None = self.eat_token(Token::LBrace) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let body = match self.parse_expression() {
+            Ok(e) => e,
+            Err(_) => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        if let None = self.eat_token(Token::RBrace) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        if let None = self.eat_token(Token::SemiColon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        Ok(Feature::Method {
+            ident,
+            formals,
+            return_type,
+            body,
+        })
     }
     // FORMAL: OBJECTID : TYPEID
     fn parse_formal(&mut self) -> Result<Formal> {
-        todo!()
+        let save = self.pos;
+
+        let ident = self.eat_object_ident().ok_or(ParseError::Err)?;
+
+        if let None = self.eat_token(Token::Colon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let ident_type = match self.eat_type_ident() {
+            Some((_, t)) => t,
+            None => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        Ok(Formal { ident, ident_type })
     }
     // ATTRIBUTE: OBJECTID : TYPEID [ <- expression ] ;
     fn parse_attribute(&mut self) -> Result<Feature> {
-        todo!()
+        let save = self.pos;
+
+        let ident = self.eat_object_ident().ok_or(ParseError::Err)?;
+
+        if let None = self.eat_token(Token::Colon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        let ident_type = match self.eat_type_ident() {
+            Some((_, t)) => t,
+            None => {
+                self.pos = save;
+                return Err(ParseError::Err);
+            }
+        };
+
+        let init = if let Some(_) = self.eat_token(Token::Assign) {
+            match self.parse_expression() {
+                Ok(e) => Some(e),
+                Err(_) => {
+                    self.pos = save;
+                    return Err(ParseError::Err);
+                }
+            }
+        } else {
+            None
+        };
+
+        if let None = self.eat_token(Token::SemiColon) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
+
+        Ok(Feature::Attribute {
+            ident,
+            ident_type,
+            init,
+        })
     }
     /*
      * A: INTEGER
@@ -159,6 +355,7 @@ impl Parser {
     fn parse_primary(&mut self) -> Result<Expression> {
         self.parse_integer()
             .or_else(|_| self.parse_string())
+            .or_else(|_| self.parse_self_dispatch())
             .or_else(|_| self.parse_object_ident())
             .or_else(|_| self.parse_bool())
             .or_else(|_| self.parse_new())
@@ -178,6 +375,7 @@ impl Parser {
         let save = self.pos;
         let mut lookahead = self.peek().clone();
         let mut rhs;
+        dbg!(&lookahead);
         let mut lhs = if is_unary_op(&lookahead) {
             self.pos += 1;
             match self.parse_associative_expression(precedence(&lookahead) + 1) {
@@ -201,16 +399,19 @@ impl Parser {
                 }
             }
         };
+        dbg!(&lhs);
         lookahead = self.peek().clone();
+        dbg!(&lookahead);
         while is_binary_op(&lookahead) && (precedence(&lookahead) >= min_precedence) {
             self.pos += 1;
-            rhs = match self.parse_associative_expression(precedence(&lookahead)) {
+            rhs = match self.parse_associative_expression(precedence(&lookahead) + 1) {
                 Ok(result) => result,
                 Err(e) => {
                     self.pos = save;
                     return Err(e);
                 }
             };
+            dbg!(&rhs);
             lhs = match lookahead {
                 Token::Plus => Expression::Plus(Box::new(lhs), Box::new(rhs)),
                 Token::Dash => Expression::Subtract(Box::new(lhs), Box::new(rhs)),
@@ -221,7 +422,9 @@ impl Parser {
                 Token::Equal => Expression::Equal(Box::new(lhs), Box::new(rhs)),
                 _ => panic!("Invalid token"),
             };
+            dbg!(&lhs);
             lookahead = self.peek().clone();
+            dbg!(&lookahead);
         }
         Ok(lhs)
     }
@@ -567,7 +770,7 @@ impl Parser {
             Err(e) => return Err(e),
         };
 
-        let line_number = match self.eat_token(Token::Fi) {
+        let line_number = match self.eat_token(Token::Pool) {
             Some(n) => n,
             None => {
                 self.pos = save;
@@ -632,6 +835,7 @@ impl Parser {
         let mut bindings = Vec::new();
 
         loop {
+            dbg!(self.peek());
             let object_ident = match self.eat_object_ident() {
                 Some(ident) => ident,
                 None => {
@@ -639,7 +843,7 @@ impl Parser {
                     return Err(ParseError::Err);
                 }
             };
-
+            dbg!(self.peek());
             if let None = self.eat_token(Token::Colon) {
                 self.pos = save;
                 return Err(ParseError::Err);
@@ -861,16 +1065,169 @@ impl Parser {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     use crate::lexer::Lexer;
+    use std::{
+        fs::{read_to_string, File},
+        io::{BufWriter, Write},
+    };
+
+    const PATH: &str = "tests/parsing";
 
     #[test]
-    fn test_parse_expression(){
-        let text = "Let a: String <- 1 + isvoid 2 in not abc * c <- 5 - ~aa / 4 - 1;sdf";
-        let iter = Lexer::lex(text);
+    fn test_parse_program() {
+        // let text = "1 + 2 - 3 * 4 + 5 * 6 -1";
+        // let text = "let a: String <- 1 + isvoid 2 in not abc * c <- 5 - ~aa@Int.parse(1 - isvoid 6 / b.sort(5,8,9), print(5) + ~9) / 4 - 1;sdf";
+        let text = read_to_string("stack.cl").unwrap();
+        let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_expression();
+        let result = parser.parse();
         assert_ne!(result, Err(ParseError::Err));
+        // write result.to_string() to output.txt
+        let file = File::create(format!("{PATH}/program.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_if() {
+        let text = "if 1 then 2 else if 3 then 5 else if 2 then expr.print(\"1\" + 2) else some@String.sort() fi fi fi";
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_if();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/if.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_block() {
+        let text = r#"{
+    while flag loop
+        {
+            io.out_string(">");
+            let str: String <- io.in_string() in {
+                if str = "d" then
+                    list.print(io)
+        else if str = "e" then
+                    evaluate()
+                else if str = "x" then
+                    flag <- false
+                else
+                    list <- list.cons(str)
+                fi fi fi;
+            };
+        }
+    pool;
+    0;
+}"#;
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_block();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/block.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_while() {
+        let text = r#"while flag loop
+    {
+        io.out_string(">");
+        let str: String <- io.in_string() in {
+            if str = "d" then
+                list.print(io)
+            else if str = "e" then
+                evaluate()
+            else if str = "x" then
+                flag <- false
+            else
+                list <- list.cons(str)
+            fi fi fi;
+        };
+    }
+pool;"#;
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_while();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/while.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_let_1() {
+        let text = r#"let flag: Bool <- true in {
+    while flag loop
+        {
+            io.out_string(">");
+            let str: String <- io.in_string() in {
+                if str = "d" then
+                    list.print(io)
+                else if str = "e" then
+                    evaluate()
+                else if str = "x" then
+                    flag <- false
+                else
+                    list <- list.cons(str)
+                fi fi fi;
+            };
+        }
+    pool;
+    0;
+}"#;
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_let();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/let_1.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_let_2() {
+        let text = r#"let str2int: A2I <- new A2I,
+    a: Int <- str2int.a2i(list.get_next().get_item()),
+    b: Int <- str2int.a2i(list.get_next().get_next().get_item()) in {
+        list <- list.get_next().get_next().get_next().cons(str2int.i2a(a + b));
+}"#;
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_let();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/let_2.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
+    }
+    #[test]
+    fn test_parse_method() {
+        let text = r#"run(io: IO): Int{
+    let flag: Bool <- true in {
+        while flag loop
+            {
+                io.out_string(">");
+                let str: String <- io.in_string() in {
+                    if str = "d" then
+                        list.print(io)
+                    else if str = "e" then
+                        evaluate()
+                    else if str = "x" then
+                        flag <- false
+                    else
+                        list <- list.cons(str)
+                    fi fi fi;
+                };
+            }
+        pool;
+        0;
+    }
+};"#;
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_method();
+        assert_ne!(result, Err(ParseError::Err));
+        let file = File::create(format!("{PATH}/method.txt")).unwrap();
+        let mut file = BufWriter::new(file);
+        write!(file, "{}", result.unwrap()).unwrap();
     }
 }

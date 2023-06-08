@@ -584,7 +584,9 @@ impl TreeFormat for Expression {
                 .collect(),
             Expression::ObjectIdent(ident) => vec![format!("ObjectIdent: {ident}")],
             Expression::IntLiteral(i) => vec![format!("IntLiteral: {i}")],
-            Expression::StringLiteral(s) => vec![format!("StringLiteral: {s}")],
+            Expression::StringLiteral(s) => {
+                vec![format!("StringLiteral: \"{}\"", s.replace('\n', "\\n"))]
+            }
             Expression::BoolLiteral(b) => vec![format!("BoolLiteral: {b}")],
         }
     }
@@ -789,7 +791,7 @@ impl<T: TreeFormat> TreeFormat for Vec<T> {
 impl TreeFormat for Class {
     fn tree_fmt(&self) -> Vec<String> {
         let mut strings = vec![
-            format!("Class─┬─class_type: {}", self.class_type),
+            format!("Class─┬─name: {}", self.name),
             format!("      ├─parent: {}", self.parent),
         ];
 
@@ -838,11 +840,13 @@ pub(crate) struct Branch {
     pub(crate) do_expr: Expression,
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Formal {
-    ident: SharedString,
-    ident_type: SharedString,
+    pub(crate) ident: SharedString,
+    pub(crate) ident_type: SharedString,
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) enum Feature {
     Attribute {
         ident: SharedString,
@@ -857,13 +861,15 @@ pub(crate) enum Feature {
     },
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Class {
-    class_type: SharedString,
-    parent: SharedString,
-    features: Vec<Feature>,
+    pub(crate) name: SharedString,
+    pub(crate) parent: SharedString,
+    pub(crate) features: Vec<Feature>,
 }
 
-pub(crate) struct Program(Vec<Class>);
+#[derive(Debug, PartialEq)]
+pub(crate) struct Program(pub(crate) Vec<Class>);
 
 impl Display for Program {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -871,7 +877,13 @@ impl Display for Program {
     }
 }
 
-impl Display for Expression{
+impl Display for Feature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.tree_fmt().join("\n"))
+    }
+}
+
+impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.tree_fmt().join("\n"))
     }
@@ -918,21 +930,21 @@ mod test {
             },
         ];
         let class = Class {
-            class_type: SharedString::new("TestClass"),
+            name: SharedString::new("TestClass"),
             parent: SharedString::new("IO"),
             features: vec![],
         };
         let class1 = Class {
-            class_type: SharedString::new("DummyClass"),
+            name: SharedString::new("DummyClass"),
             parent: SharedString::new("Boolean"),
             features,
         };
         let program = Program(vec![class, class1]);
         assert_eq!(
-            "Program: ─┬─Class─┬─class_type: TestClass
+            "Program: ─┬─Class─┬─name: TestClass
           │       ├─parent: IO
           │       └─feature: ───[]
-          └─Class─┬─class_type: DummyClass
+          └─Class─┬─name: DummyClass
                   ├─parent: Boolean
                   └─feature: ─┬─Feature─┬─ident: name
                               │         ├─ident_type: String

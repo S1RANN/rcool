@@ -1,0 +1,14 @@
+If─┬─condition: IntLiteral: 1
+   ├─true_do: IntLiteral: 2
+   └─else_do: If─┬─condition: IntLiteral: 3
+                 ├─true_do: IntLiteral: 5
+                 └─else_do: If─┬─condition: IntLiteral: 2
+                               ├─true_do: Dispatch─┬─class_ident: ObjectIdent: expr
+                               │                   ├─as_type: SELF_TYPE
+                               │                   ├─method_ident: print
+                               │                   └─params: ───Plus─┬─lhs: StringLiteral: "1"
+                               │                                     └─rhs: IntLiteral: 2
+                               └─else_do: Dispatch─┬─class_ident: ObjectIdent: some
+                                                   ├─as_type: String
+                                                   ├─method_ident: sort
+                                                   └─params: ───[]
