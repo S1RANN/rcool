@@ -98,7 +98,7 @@ impl Parser {
         &self.tokens[self.pos].1
     }
     // PROGRAM: [CLASS]+
-    fn parse(&mut self) -> Result<Program> {
+    fn parse_program(&mut self) -> Result<Program> {
         let mut classes = Vec::new();
         loop {
             match self.parse_class() {
@@ -1073,161 +1073,82 @@ mod tests {
         io::{BufWriter, Write},
     };
 
-    const PATH: &str = "tests/parsing";
+    const PATH: &str = "tests/parser";
 
+    //#[test]
+    #[allow(dead_code)]
+    fn gen_correct_parsed_result() {
+        let srcs = vec!["program", "if", "block", "method", "let", "while"];
+        for src in srcs {
+            let text = read_to_string(format!("{PATH}/src/{src}.cl")).unwrap();
+            let iter = Lexer::lex(&text);
+            let mut parser = Parser::new(iter);
+            let result = match src {
+                "program" => parser.parse_program().unwrap().to_string(),
+                "if" => parser.parse_if().unwrap().to_string(),
+                "block" => parser.parse_block().unwrap().to_string(),
+                "method" => parser.parse_method().unwrap().to_string(),
+                "let" => parser.parse_let().unwrap().to_string(),
+                "while" => parser.parse_while().unwrap().to_string(),
+                _ => unreachable!(),
+            };
+            let file = File::create(format!("{PATH}/dst/{src}.txt")).unwrap();
+            let mut file = BufWriter::new(file);
+            write!(file, "{}", result).unwrap();
+        }
+    }
     #[test]
     fn test_parse_program() {
-        // let text = "1 + 2 - 3 * 4 + 5 * 6 -1";
-        // let text = "let a: String <- 1 + isvoid 2 in not abc * c <- 5 - ~aa@Int.parse(1 - isvoid 6 / b.sort(5,8,9), print(5) + ~9) / 4 - 1;sdf";
-        let text = read_to_string("stack.cl").unwrap();
+        let text = read_to_string(format!("{PATH}/src/program.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse();
-        assert_ne!(result, Err(ParseError::Err));
-        // write result.to_string() to output.txt
-        let file = File::create(format!("{PATH}/program.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_program().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/program.txt")).unwrap();
+        assert_eq!(result, correct);
     }
     #[test]
     fn test_parse_if() {
-        let text = "if 1 then 2 else if 3 then 5 else if 2 then expr.print(\"1\" + 2) else some@String.sort() fi fi fi";
+        let text = read_to_string(format!("{PATH}/src/if.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_if();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/if.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_if().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/if.txt")).unwrap();
+        assert_eq!(result, correct);
     }
     #[test]
     fn test_parse_block() {
-        let text = r#"{
-    while flag loop
-        {
-            io.out_string(">");
-            let str: String <- io.in_string() in {
-                if str = "d" then
-                    list.print(io)
-        else if str = "e" then
-                    evaluate()
-                else if str = "x" then
-                    flag <- false
-                else
-                    list <- list.cons(str)
-                fi fi fi;
-            };
-        }
-    pool;
-    0;
-}"#;
+        let text = read_to_string(format!("{PATH}/src/block.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_block();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/block.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_block().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/block.txt")).unwrap();
+        assert_eq!(result, correct);
     }
     #[test]
     fn test_parse_while() {
-        let text = r#"while flag loop
-    {
-        io.out_string(">");
-        let str: String <- io.in_string() in {
-            if str = "d" then
-                list.print(io)
-            else if str = "e" then
-                evaluate()
-            else if str = "x" then
-                flag <- false
-            else
-                list <- list.cons(str)
-            fi fi fi;
-        };
-    }
-pool;"#;
+        let text = read_to_string(format!("{PATH}/src/while.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_while();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/while.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_while().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/while.txt")).unwrap();
+        assert_eq!(result, correct);
     }
     #[test]
-    fn test_parse_let_1() {
-        let text = r#"let flag: Bool <- true in {
-    while flag loop
-        {
-            io.out_string(">");
-            let str: String <- io.in_string() in {
-                if str = "d" then
-                    list.print(io)
-                else if str = "e" then
-                    evaluate()
-                else if str = "x" then
-                    flag <- false
-                else
-                    list <- list.cons(str)
-                fi fi fi;
-            };
-        }
-    pool;
-    0;
-}"#;
+    fn test_parse_let() {
+        let text = read_to_string(format!("{PATH}/src/let.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_let();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/let_1.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
-    }
-    #[test]
-    fn test_parse_let_2() {
-        let text = r#"let str2int: A2I <- new A2I,
-    a: Int <- str2int.a2i(list.get_next().get_item()),
-    b: Int <- str2int.a2i(list.get_next().get_next().get_item()) in {
-        list <- list.get_next().get_next().get_next().cons(str2int.i2a(a + b));
-}"#;
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
-        let result = parser.parse_let();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/let_2.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_let().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/let.txt")).unwrap();
+        assert_eq!(result, correct);
     }
     #[test]
     fn test_parse_method() {
-        let text = r#"run(io: IO): Int{
-    let flag: Bool <- true in {
-        while flag loop
-            {
-                io.out_string(">");
-                let str: String <- io.in_string() in {
-                    if str = "d" then
-                        list.print(io)
-                    else if str = "e" then
-                        evaluate()
-                    else if str = "x" then
-                        flag <- false
-                    else
-                        list <- list.cons(str)
-                    fi fi fi;
-                };
-            }
-        pool;
-        0;
-    }
-};"#;
+        let text = read_to_string(format!("{PATH}/src/method.cl")).unwrap();
         let iter = Lexer::lex(&text);
         let mut parser = Parser::new(iter);
-        let result = parser.parse_method();
-        assert_ne!(result, Err(ParseError::Err));
-        let file = File::create(format!("{PATH}/method.txt")).unwrap();
-        let mut file = BufWriter::new(file);
-        write!(file, "{}", result.unwrap()).unwrap();
+        let result = parser.parse_method().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/method.txt")).unwrap();
+        assert_eq!(result, correct);
     }
 }

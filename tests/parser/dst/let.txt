@@ -1,0 +1,63 @@
+Let─┬─ident: flag
+    ├─ident_type: Bool
+    ├─init: BoolLiteral: true
+    └─do_expr: Let─┬─ident: a
+                   ├─ident_type: Int
+                   ├─init: Dispatch─┬─class_ident: ObjectIdent: str2int
+                   │                ├─as_type: SELF_TYPE
+                   │                ├─method_ident: a2i
+                   │                └─params: ───Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+                   │                                      │                       ├─as_type: SELF_TYPE
+                   │                                      │                       ├─method_ident: get_next
+                   │                                      │                       └─params: ───[]
+                   │                                      ├─as_type: SELF_TYPE
+                   │                                      ├─method_ident: get_item
+                   │                                      └─params: ───[]
+                   └─do_expr: Let─┬─ident: b
+                                  ├─ident_type: Int
+                                  ├─init: Dispatch─┬─class_ident: ObjectIdent: str2int
+                                  │                ├─as_type: SELF_TYPE
+                                  │                ├─method_ident: a2i
+                                  │                └─params: ───Dispatch─┬─class_ident: Dispatch─┬─class_ident: Dispatch─┬─class_ident: ObjectIdent: list
+                                  │                                      │                       │                       ├─as_type: SELF_TYPE
+                                  │                                      │                       │                       ├─method_ident: get_next
+                                  │                                      │                       │                       └─params: ───[]
+                                  │                                      │                       ├─as_type: SELF_TYPE
+                                  │                                      │                       ├─method_ident: get_next
+                                  │                                      │                       └─params: ───[]
+                                  │                                      ├─as_type: SELF_TYPE
+                                  │                                      ├─method_ident: get_item
+                                  │                                      └─params: ───[]
+                                  └─do_expr: Block: ─┬─While─┬─condition: ObjectIdent: flag
+                                                     │       └─do_expr: Block: ─┬─Dispatch─┬─class_ident: ObjectIdent: io
+                                                     │                          │          ├─as_type: SELF_TYPE
+                                                     │                          │          ├─method_ident: out_string
+                                                     │                          │          └─params: ───StringLiteral: ">"
+                                                     │                          └─Let─┬─ident: str
+                                                     │                                ├─ident_type: String
+                                                     │                                ├─init: Dispatch─┬─class_ident: ObjectIdent: io
+                                                     │                                │                ├─as_type: SELF_TYPE
+                                                     │                                │                ├─method_ident: in_string
+                                                     │                                │                └─params: ───[]
+                                                     │                                └─do_expr: Block: ───If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+                                                     │                                                        │                  └─rhs: StringLiteral: "d"
+                                                     │                                                        ├─true_do: Dispatch─┬─class_ident: ObjectIdent: list
+                                                     │                                                        │                   ├─as_type: SELF_TYPE
+                                                     │                                                        │                   ├─method_ident: print
+                                                     │                                                        │                   └─params: ───ObjectIdent: io
+                                                     │                                                        └─else_do: If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+                                                     │                                                                      │                  └─rhs: StringLiteral: "e"
+                                                     │                                                                      ├─true_do: Dispatch─┬─class_ident: None
+                                                     │                                                                      │                   ├─as_type: SELF_TYPE
+                                                     │                                                                      │                   ├─method_ident: evaluate
+                                                     │                                                                      │                   └─params: ───[]
+                                                     │                                                                      └─else_do: If─┬─condition: Equal─┬─lhs: ObjectIdent: str
+                                                     │                                                                                    │                  └─rhs: StringLiteral: "x"
+                                                     │                                                                                    ├─true_do: Assignment─┬─ident: flag
+                                                     │                                                                                    │                     └─init: BoolLiteral: false
+                                                     │                                                                                    └─else_do: Assignment─┬─ident: list
+                                                     │                                                                                                          └─init: Dispatch─┬─class_ident: ObjectIdent: list
+                                                     │                                                                                                                           ├─as_type: SELF_TYPE
+                                                     │                                                                                                                           ├─method_ident: cons
+                                                     │                                                                                                                           └─params: ───ObjectIdent: str
+                                                     └─IntLiteral: 0

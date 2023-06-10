@@ -30,4 +30,8 @@ Block: ─┬─While─┬─condition: ObjectIdent: flag
         │                                                                                                                           ├─as_type: SELF_TYPE
         │                                                                                                                           ├─method_ident: cons
         │                                                                                                                           └─params: ───ObjectIdent: str
-        └─IntLiteral: 0
+        ├─IntLiteral: 0
+        └─Dispatch─┬─class_ident: ObjectIdent: io
+                   ├─as_type: SELF_TYPE
+                   ├─method_ident: out_string
+                   └─params: ───ObjectIdent: a
