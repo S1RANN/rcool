@@ -4,7 +4,7 @@ use crate::ast::{Branch, Class, Expression, Feature, Formal, Program};
 use crate::lexer::Token;
 use crate::string_table::SharedString;
 
-struct Parser {
+pub(crate) struct Parser {
     tokens: Vec<(usize, Token)>,
     pos: usize,
     self_type: SharedString,
@@ -48,7 +48,7 @@ const fn is_unary_op(token: &Token) -> bool {
 }
 
 #[derive(Debug, PartialEq)]
-enum ParseError {
+pub(crate) enum ParseError {
     Err,
 }
 
@@ -67,7 +67,7 @@ impl std::fmt::Display for ParseError {
 type Result<T> = std::result::Result<T, ParseError>;
 
 impl Parser {
-    fn new<'a>(token_iter: impl Iterator<Item = (usize, Token)> + 'a) -> Parser {
+    pub(crate) fn new<'a>(token_iter: impl Iterator<Item = (usize, Token)> + 'a) -> Parser {
         // if tokens contains SELF_TYPE assign it to the self_type field
         let tokens: Vec<(usize, Token)> = token_iter.collect();
         let self_type = match tokens.iter().find(|(_, token)| match token {
@@ -98,7 +98,7 @@ impl Parser {
         &self.tokens[self.pos].1
     }
     // PROGRAM: [CLASS]+
-    fn parse_program(&mut self) -> Result<Program> {
+    pub(crate) fn parse_program(&mut self) -> Result<Program> {
         let mut classes = Vec::new();
         loop {
             match self.parse_class() {
@@ -375,7 +375,6 @@ impl Parser {
         let save = self.pos;
         let mut lookahead = self.peek().clone();
         let mut rhs;
-        dbg!(&lookahead);
         let mut lhs = if is_unary_op(&lookahead) {
             self.pos += 1;
             match self.parse_associative_expression(precedence(&lookahead) + 1) {
@@ -399,9 +398,7 @@ impl Parser {
                 }
             }
         };
-        dbg!(&lhs);
         lookahead = self.peek().clone();
-        dbg!(&lookahead);
         while is_binary_op(&lookahead) && (precedence(&lookahead) >= min_precedence) {
             self.pos += 1;
             rhs = match self.parse_associative_expression(precedence(&lookahead) + 1) {
@@ -411,7 +408,6 @@ impl Parser {
                     return Err(e);
                 }
             };
-            dbg!(&rhs);
             lhs = match lookahead {
                 Token::Plus => Expression::Plus(Box::new(lhs), Box::new(rhs)),
                 Token::Dash => Expression::Subtract(Box::new(lhs), Box::new(rhs)),
@@ -422,9 +418,7 @@ impl Parser {
                 Token::Equal => Expression::Equal(Box::new(lhs), Box::new(rhs)),
                 _ => panic!("Invalid token"),
             };
-            dbg!(&lhs);
             lookahead = self.peek().clone();
-            dbg!(&lookahead);
         }
         Ok(lhs)
     }
@@ -835,7 +829,6 @@ impl Parser {
         let mut bindings = Vec::new();
 
         loop {
-            dbg!(self.peek());
             let object_ident = match self.eat_object_ident() {
                 Some(ident) => ident,
                 None => {
@@ -843,7 +836,6 @@ impl Parser {
                     return Err(ParseError::Err);
                 }
             };
-            dbg!(self.peek());
             if let None = self.eat_token(Token::Colon) {
                 self.pos = save;
                 return Err(ParseError::Err);
@@ -921,13 +913,10 @@ impl Parser {
 
         let mut branches = Vec::new();
 
-        let line_number = loop {
+        loop {
             let ident = match self.eat_object_ident() {
                 Some(ident) => ident,
-                None => {
-                    self.pos = save;
-                    return Err(ParseError::Err);
-                }
+                None => break,
             };
 
             if let None = self.eat_token(Token::Colon) {
@@ -963,13 +952,14 @@ impl Parser {
             });
 
             if let None = self.eat_token(Token::SemiColon) {
-                if let Some(line_number) = self.eat_token(Token::Esac) {
-                    break line_number;
-                }
-                self.pos = save;
                 return Err(ParseError::Err);
             }
-        };
+        }
+
+        if let None = self.eat_token(Token::Esac) {
+            self.pos = save;
+            return Err(ParseError::Err);
+        }
 
         Ok(Expression::Case {
             condition: Box::new(condition),
@@ -1078,7 +1068,19 @@ mod tests {
     //#[test]
     #[allow(dead_code)]
     fn gen_correct_parsed_result() {
-        let srcs = vec!["program", "if", "block", "method", "let", "while"];
+        let srcs = vec![
+            "program",
+            "if",
+            "block",
+            "method",
+            "let",
+            "while",
+            "case",
+            "attribute",
+            "class",
+            "feature",
+            "formal",
+        ];
         for src in srcs {
             let text = read_to_string(format!("{PATH}/src/{src}.cl")).unwrap();
             let iter = Lexer::lex(&text);
@@ -1090,6 +1092,11 @@ mod tests {
                 "method" => parser.parse_method().unwrap().to_string(),
                 "let" => parser.parse_let().unwrap().to_string(),
                 "while" => parser.parse_while().unwrap().to_string(),
+                "case" => parser.parse_case().unwrap().to_string(),
+                "attribute" => parser.parse_attribute().unwrap().to_string(),
+                "class" => parser.parse_class().unwrap().to_string(),
+                "feature" => parser.parse_feature().unwrap().to_string(),
+                "formal" => parser.parse_formal().unwrap().to_string(),
                 _ => unreachable!(),
             };
             let file = File::create(format!("{PATH}/dst/{src}.txt")).unwrap();
@@ -1149,6 +1156,51 @@ mod tests {
         let mut parser = Parser::new(iter);
         let result = parser.parse_method().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/method.txt")).unwrap();
+        assert_eq!(result, correct);
+    }
+    #[test]
+    fn test_parse_case() {
+        let text = read_to_string(format!("{PATH}/src/case.cl")).unwrap();
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_case().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/case.txt")).unwrap();
+        assert_eq!(result, correct);
+    }
+    #[test]
+    fn test_parse_attribute() {
+        let text = read_to_string(format!("{PATH}/src/attribute.cl")).unwrap();
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_attribute().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/attribute.txt")).unwrap();
+        assert_eq!(result, correct);
+    }
+    #[test]
+    fn test_parse_class() {
+        let text = read_to_string(format!("{PATH}/src/class.cl")).unwrap();
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_class().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/class.txt")).unwrap();
+        assert_eq!(result, correct);
+    }
+    #[test]
+    fn test_parse_feature() {
+        let text = read_to_string(format!("{PATH}/src/feature.cl")).unwrap();
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_feature().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/feature.txt")).unwrap();
+        assert_eq!(result, correct);
+    }
+    #[test]
+    fn test_parse_formal() {
+        let text = read_to_string(format!("{PATH}/src/formal.cl")).unwrap();
+        let iter = Lexer::lex(&text);
+        let mut parser = Parser::new(iter);
+        let result = parser.parse_formal().unwrap().to_string();
+        let correct = read_to_string(format!("{PATH}/dst/formal.txt")).unwrap();
         assert_eq!(result, correct);
     }
 }

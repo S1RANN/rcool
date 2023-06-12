@@ -877,6 +877,18 @@ impl Display for Program {
     }
 }
 
+impl Display for Class {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.tree_fmt().join("\n"))
+    }
+}
+
+impl Display for Formal{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.tree_fmt().join("\n"))
+    }
+}
+
 impl Display for Feature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.tree_fmt().join("\n"))

@@ -1,13 +1,15 @@
 use lexer::Lexer;
+use parser::Parser;
 use std::{
     fs::read_to_string,
     io::{Error, ErrorKind},
 };
 
-mod parser;
-mod lexer;
-mod string_table;
 mod ast;
+mod lexer;
+mod parser;
+mod semant;
+mod string_table;
 fn main() -> Result<(), Error> {
     let path = match std::env::args().nth(1) {
         Some(p) => p,
@@ -16,9 +18,11 @@ fn main() -> Result<(), Error> {
 
     let text = read_to_string(path)?;
 
-    for (line_number, token) in Lexer::lex(&text) {
-        println!("#{line_number} {token}");
-    }
+    let iter = Lexer::lex(&text);
+    let mut parser = Parser::new(iter);
 
+    let ast = parser.parse_program().unwrap();
+
+    println!("{ast}");
     Ok(())
 }

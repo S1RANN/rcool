@@ -1,0 +1,3 @@
+Feature─┬─ident: list
+        ├─ident_type: List
+        └─init: New───type_ident: List

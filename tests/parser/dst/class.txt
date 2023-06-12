@@ -1,0 +1,65 @@
+Class─┬─name: List
+      ├─parent: Object
+      └─feature: ─┬─Feature─┬─ident: item
+                  │         └─ident_type: String
+                  ├─Feature─┬─ident: next
+                  │         └─ident_type: List
+                  ├─Feature─┬─ident: is_nil
+                  │         ├─formals: ───[]
+                  │         ├─return_type: Bool
+                  │         └─body: BoolLiteral: true
+                  ├─Feature─┬─ident: get_item
+                  │         ├─formals: ───[]
+                  │         ├─return_type: String
+                  │         └─body: ObjectIdent: item
+                  ├─Feature─┬─ident: get_next
+                  │         ├─formals: ───[]
+                  │         ├─return_type: List
+                  │         └─body: ObjectIdent: next
+                  ├─Feature─┬─ident: set_item
+                  │         ├─formals: ───Formal─┬─ident: in_item
+                  │         │                    └─ident_type: String
+                  │         ├─return_type: String
+                  │         └─body: Assignment─┬─ident: item
+                  │                            └─init: ObjectIdent: in_item
+                  ├─Feature─┬─ident: init
+                  │         ├─formals: ─┬─Formal─┬─ident: str
+                  │         │           │        └─ident_type: String
+                  │         │           └─Formal─┬─ident: rest
+                  │         │                    └─ident_type: List
+                  │         ├─return_type: List
+                  │         └─body: Block: ─┬─Assignment─┬─ident: item
+                  │                         │            └─init: ObjectIdent: str
+                  │                         ├─Assignment─┬─ident: next
+                  │                         │            └─init: ObjectIdent: rest
+                  │                         └─ObjectIdent: self
+                  ├─Feature─┬─ident: cons
+                  │         ├─formals: ───Formal─┬─ident: str
+                  │         │                    └─ident_type: String
+                  │         ├─return_type: List
+                  │         └─body: Dispatch─┬─class_ident: New───type_ident: Cons
+                  │                          ├─as_type: SELF_TYPE
+                  │                          ├─method_ident: init
+                  │                          └─params: ─┬─ObjectIdent: str
+                  │                                     └─ObjectIdent: self
+                  └─Feature─┬─ident: print
+                            ├─formals: ───Formal─┬─ident: io
+                            │                    └─ident_type: IO
+                            ├─return_type: Int
+                            └─body: If─┬─condition: Not───expr: Dispatch─┬─class_ident: None
+                                       │                                 ├─as_type: SELF_TYPE
+                                       │                                 ├─method_ident: is_nil
+                                       │                                 └─params: ───[]
+                                       ├─true_do: Block: ─┬─Dispatch─┬─class_ident: ObjectIdent: io
+                                       │                  │          ├─as_type: SELF_TYPE
+                                       │                  │          ├─method_ident: out_string
+                                       │                  │          └─params: ───ObjectIdent: item
+                                       │                  ├─Dispatch─┬─class_ident: ObjectIdent: io
+                                       │                  │          ├─as_type: SELF_TYPE
+                                       │                  │          ├─method_ident: out_string
+                                       │                  │          └─params: ───StringLiteral: "\n"
+                                       │                  └─Dispatch─┬─class_ident: ObjectIdent: next
+                                       │                             ├─as_type: SELF_TYPE
+                                       │                             ├─method_ident: print
+                                       │                             └─params: ───ObjectIdent: io
+                                       └─else_do: IntLiteral: 0

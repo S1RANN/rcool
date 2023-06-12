@@ -1,0 +1,25 @@
+Case─┬─condition: ObjectIdent: condition
+     └─branches: ─┬─Branch─┬─ident: x
+                  │        ├─ident_type: Int
+                  │        └─do_expr: Dispatch─┬─class_ident: ObjectIdent: io
+                  │                            ├─as_type: SELF_TYPE
+                  │                            ├─method_ident: print
+                  │                            └─params: ───StringLiteral: "x is Int"
+                  ├─Branch─┬─ident: y
+                  │        ├─ident_type: String
+                  │        └─do_expr: Block: ─┬─Let─┬─ident: x
+                  │                           │     ├─ident_type: String
+                  │                           │     ├─init: Dispatch─┬─class_ident: ObjectIdent: y
+                  │                           │     │                ├─as_type: SELF_TYPE
+                  │                           │     │                ├─method_ident: concat
+                  │                           │     │                └─params: ───StringLiteral: "\n"
+                  │                           │     └─do_expr: Dispatch─┬─class_ident: ObjectIdent: io
+                  │                           │                         ├─as_type: SELF_TYPE
+                  │                           │                         ├─method_ident: print
+                  │                           │                         └─params: ───ObjectIdent: x
+                  │                           └─ObjectIdent: y
+                  └─Branch─┬─ident: z
+                           ├─ident_type: Bool
+                           └─do_expr: If─┬─condition: ObjectIdent: z
+                                         ├─true_do: IntLiteral: 1
+                                         └─else_do: IntLiteral: 2
