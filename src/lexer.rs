@@ -126,30 +126,33 @@ impl Token {
     }
 }
 
-pub struct Lexer<'a> {
+pub(crate) struct Lexer<'a, 'b> {
     text: &'a str,
     pos: usize,
     line_number: usize,
-    str_table: StrTable,
-    int_table: StrTable,
-    id_table: StrTable,
+    str_table: &'b mut StrTable,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(text: &'a str) -> Lexer<'a> {
+impl<'a, 'b> Lexer<'a, 'b> {
+    pub fn new(text: &'a str, str_table: &'b mut StrTable) -> Self {
         Lexer {
             text,
             pos: 0,
             line_number: 1,
-            str_table: StrTable::new(),
-            int_table: StrTable::new(),
-            id_table: StrTable::new(),
+            str_table,
         }
     }
 
     // return (line_number, token) if succeed
-    pub fn lex(s: &str) -> impl Iterator<Item = (usize, Token)> + '_ {
-        let mut lexer = Lexer::new(s);
+    pub fn lex<'c>(
+        s: &'a str,
+        str_table: &'b mut StrTable,
+    ) -> impl Iterator<Item = (usize, Token)> + 'c
+    where
+        'a: 'c,
+        'b: 'c,
+    {
+        let mut lexer = Lexer::new(s, str_table);
         std::iter::from_fn(move || {
             lexer
                 .filter_white_space_and_comment()
@@ -234,12 +237,12 @@ impl<'a> Lexer<'a> {
                 return None;
             }
             if !c.is_ascii_digit() {
-                let id = self.int_table.insert(&self.text[self.pos..idx]);
+                let id = self.str_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::IntConst(id));
             }
         }
-        let id = self.int_table.insert(&self.text[self.pos..]);
+        let id = self.str_table.insert(&self.text[self.pos..]);
         self.pos = self.text.len();
         Some(Token::IntConst(id))
     }
@@ -254,12 +257,12 @@ impl<'a> Lexer<'a> {
         }
         for (idx, c) in text_char_indices {
             if !c.is_ascii_alphanumeric() && c != '_' {
-                let id = self.id_table.insert(&self.text[self.pos..idx]);
+                let id = self.str_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::TypeId(id));
             }
         }
-        let id = self.id_table.insert(&self.text[self.pos..]);
+        let id = self.str_table.insert(&self.text[self.pos..]);
         self.pos = self.text.len();
         Some(Token::TypeId(id))
     }
@@ -274,12 +277,12 @@ impl<'a> Lexer<'a> {
         }
         for (idx, c) in text_char_indices {
             if !c.is_ascii_alphanumeric() && c != '_' {
-                let id = self.id_table.insert(&self.text[self.pos..idx]);
+                let id = self.str_table.insert(&self.text[self.pos..idx]);
                 self.pos = idx;
                 return Some(Token::ObjectId(id));
             }
         }
-        let id = self.id_table.insert(&self.text[self.pos..]);
+        let id = self.str_table.insert(&self.text[self.pos..]);
         self.pos = self.text.len();
         Some(Token::ObjectId(id))
     }
@@ -525,7 +528,10 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::{read_to_string, File}, io::{BufWriter, Write}};
+    use std::{
+        fs::{read_to_string, File},
+        io::{BufWriter, Write},
+    };
 
     use super::*;
 
@@ -533,9 +539,10 @@ mod tests {
     #[test]
     fn test_lex() {
         let text = read_to_string(format!("{}/test.cl", PATH)).unwrap();
+        let mut str_table = StrTable::new();
         let correct = read_to_string(format!("{}/test.txt", PATH)).unwrap();
         let mut result = vec![];
-        for (line_number, token) in Lexer::lex(&text) {
+        for (line_number, token) in Lexer::lex(&text, &mut str_table) {
             result.push(format!("#{line_number} {token}\n"));
         }
         let result = result.concat();
@@ -543,7 +550,11 @@ mod tests {
     }
     #[test]
     fn test_match_string_const() {
-        let mut lexer = Lexer::new("\"some string\"\"\\nthis is \\a string\"\"fasdf");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new(
+            "\"some string\"\"\\nthis is \\a string\"\"fasdf",
+            &mut str_table,
+        );
         if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
             assert_eq!(*s, "some string");
             assert_eq!(lexer.pos, 13);
@@ -563,13 +574,13 @@ mod tests {
             Some(Token::Error("EOF in string constant".to_string()))
         );
 
-        let mut lexer = Lexer::new("\"asdfsd \\\n\"");
+        let mut lexer = Lexer::new("\"asdfsd \\\n\"", &mut str_table);
         if let Token::StrConst(s) = lexer.match_string_const().unwrap() {
             assert_eq!(*s, "asdfsd \n");
             assert_eq!(lexer.line_number, 2);
         }
 
-        let mut lexer = Lexer::new("\"asdf\nasdfs");
+        let mut lexer = Lexer::new("\"asdf\nasdfs", &mut str_table);
         assert_eq!(
             lexer.match_string_const(),
             Some(Token::Error("Unterminated string constant".to_string()))
@@ -577,15 +588,19 @@ mod tests {
     }
     #[test]
     fn test_filter_white_space_and_comment() {
-        let mut lexer =
-            Lexer::new("     (*dsfasdf\n\r\tsdf(*(*(*dsfad*)dfasf*)\n\n*)*)      \r\n \r\t");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new(
+            "     (*dsfasdf\n\r\tsdf(*(*(*dsfad*)dfasf*)\n\n*)*)      \r\n \r\t",
+            &mut str_table,
+        );
         assert_eq!(lexer.filter_white_space_and_comment(), None);
         assert_eq!(lexer.pos, lexer.text.len());
         assert_eq!(lexer.line_number, 5);
     }
     #[test]
     fn test_match_comment() {
-        let mut lexer = Lexer::new("(*asfddsf*) (*dsaf(*fdaw*)dfsa\n*)");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("(*asfddsf*) (*dsaf(*fdaw*)dfsa\n*)", &mut str_table);
         assert_eq!(lexer.match_comment(), Ok(true));
         assert_eq!(lexer.pos, 11);
 
@@ -594,28 +609,28 @@ mod tests {
         assert_eq!(lexer.pos, lexer.text.len());
         assert_eq!(lexer.line_number, 2);
 
-        let mut lexer = Lexer::new("(*dsafsdf");
+        let mut lexer = Lexer::new("(*dsafsdf", &mut str_table);
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("EOF in comment".to_string()))
         );
         assert_eq!(lexer.pos, lexer.text.len());
 
-        let mut lexer = Lexer::new("(*ds(*af(*sdf*)*)");
+        let mut lexer = Lexer::new("(*ds(*af(*sdf*)*)", &mut str_table);
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("EOF in comment".to_string()))
         );
         assert_eq!(lexer.pos, lexer.text.len());
 
-        let mut lexer = Lexer::new("*)1234");
+        let mut lexer = Lexer::new("*)1234", &mut str_table);
         assert_eq!(
             lexer.match_comment(),
             Err(Token::Error("Unmatched *)".to_string()))
         );
         assert_eq!(lexer.pos, 2);
 
-        let mut lexer = Lexer::new("--sdfsdgdgg\n --asdfsdfsfds");
+        let mut lexer = Lexer::new("--sdfsdgdgg\n --asdfsdfsfds", &mut str_table);
         assert_eq!(lexer.match_comment(), Ok(true));
         assert_eq!(lexer.pos, 12);
 
@@ -625,13 +640,15 @@ mod tests {
     }
     #[test]
     fn test_match_white_space() {
-        let mut lexer = Lexer::new(" \t   \r \n");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new(" \t   \r \n", &mut str_table);
         assert_eq!(lexer.match_white_space(), true);
         assert_eq!(lexer.pos, lexer.text.len());
     }
     #[test]
     fn test_match_int_const() {
-        let mut lexer = Lexer::new("14335 098342 34214");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("14335 098342 34214", &mut str_table);
         // match 14335
         let mut token = lexer.match_int_const().unwrap();
         if let Token::IntConst(s) = token {
@@ -664,7 +681,8 @@ mod tests {
     }
     #[test]
     fn test_match_type_identifier() {
-        let mut lexer = Lexer::new("Student apple Fruit");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("Student apple Fruit", &mut str_table);
         // match Student
         let mut token = lexer.match_type_identifier().unwrap();
         if let Token::TypeId(s) = token {
@@ -693,7 +711,8 @@ mod tests {
     }
     #[test]
     fn test_match_object_identifier() {
-        let mut lexer = Lexer::new("Student apple Fruit test");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("Student apple Fruit test", &mut str_table);
         // match Student
         let mut result = lexer.match_object_identifier();
         assert_eq!(result, None);
@@ -727,7 +746,8 @@ mod tests {
     }
     #[test]
     fn test_match_single_operator() {
-        let mut lexer = Lexer::new(".*@~/+-<={}():;,aA%");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new(".*@~/+-<={}():;,aA%", &mut str_table);
         // match .
         let mut token = lexer.match_single_char_operator().unwrap();
         assert_eq!(token, Token::Dot);
@@ -813,7 +833,8 @@ mod tests {
     }
     #[test]
     fn test_match_multi_char_operator() {
-        let mut lexer = Lexer::new("=> <= <-");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("=> <= <-", &mut str_table);
         // match =>
         let mut token = lexer.match_multi_char_operator().unwrap();
         assert_eq!(token, Token::DArrow);
@@ -834,7 +855,8 @@ mod tests {
     }
     #[test]
     fn test_match_operator() {
-        let mut lexer = Lexer::new(". * => <-");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new(". * => <-", &mut str_table);
         // match .
         let mut token = lexer.match_operator().unwrap();
         assert_eq!(token, Token::Dot);
@@ -860,7 +882,8 @@ mod tests {
     }
     #[test]
     fn test_match_all_keyword() {
-        let mut lexer = Lexer::new("class");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("class", &mut str_table);
         // match class
         let token = lexer.match_all_keywords().unwrap();
         assert_eq!(token, Token::Class);
@@ -871,7 +894,8 @@ mod tests {
     }
     #[test]
     fn test_match_keyword() {
-        let mut lexer = Lexer::new("class");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("class", &mut str_table);
         // match class
         let token = lexer.match_keyword("class", Token::Class).unwrap();
         assert_eq!(token, Token::Class);
@@ -882,7 +906,8 @@ mod tests {
     }
     #[test]
     fn test_match_class() {
-        let mut lexer = Lexer::new("class");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("class", &mut str_table);
         // match class
         let token = lexer.match_class().unwrap();
         assert_eq!(token, Token::Class);
@@ -893,7 +918,8 @@ mod tests {
     }
     #[test]
     fn test_match_else() {
-        let mut lexer = Lexer::new("else");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("else", &mut str_table);
         // match else
         let token = lexer.match_else().unwrap();
         assert_eq!(token, Token::Else);
@@ -904,7 +930,8 @@ mod tests {
     }
     #[test]
     fn test_match_fi() {
-        let mut lexer = Lexer::new("fi");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("fi", &mut str_table);
         // match fi
         let token = lexer.match_fi().unwrap();
         assert_eq!(token, Token::Fi);
@@ -915,7 +942,8 @@ mod tests {
     }
     #[test]
     fn test_match_if() {
-        let mut lexer = Lexer::new("if");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("if", &mut str_table);
         // match if
         let token = lexer.match_if().unwrap();
         assert_eq!(token, Token::If);
@@ -926,7 +954,8 @@ mod tests {
     }
     #[test]
     fn test_match_in() {
-        let mut lexer = Lexer::new("in");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("in", &mut str_table);
         // match in
         let token = lexer.match_in().unwrap();
         assert_eq!(token, Token::In);
@@ -937,7 +966,8 @@ mod tests {
     }
     #[test]
     fn test_match_inherits() {
-        let mut lexer = Lexer::new("inherits");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("inherits", &mut str_table);
         // match inherits
         let token = lexer.match_inherits().unwrap();
         assert_eq!(token, Token::Inherits);
@@ -948,7 +978,8 @@ mod tests {
     }
     #[test]
     fn test_match_let() {
-        let mut lexer = Lexer::new("let");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("let", &mut str_table);
         // match let
         let token = lexer.match_let().unwrap();
         assert_eq!(token, Token::Let);
@@ -959,7 +990,8 @@ mod tests {
     }
     #[test]
     fn test_match_loop() {
-        let mut lexer = Lexer::new("loop");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("loop", &mut str_table);
         // match loop
         let token = lexer.match_loop().unwrap();
         assert_eq!(token, Token::Loop);
@@ -970,7 +1002,8 @@ mod tests {
     }
     #[test]
     fn test_match_pool() {
-        let mut lexer = Lexer::new("pool");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("pool", &mut str_table);
         // match pool
         let token = lexer.match_pool().unwrap();
         assert_eq!(token, Token::Pool);
@@ -981,7 +1014,8 @@ mod tests {
     }
     #[test]
     fn test_match_then() {
-        let mut lexer = Lexer::new("then");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("then", &mut str_table);
         // match then
         let token = lexer.match_then().unwrap();
         assert_eq!(token, Token::Then);
@@ -992,7 +1026,8 @@ mod tests {
     }
     #[test]
     fn test_match_while() {
-        let mut lexer = Lexer::new("while");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("while", &mut str_table);
         // match while
         let token = lexer.match_while().unwrap();
         assert_eq!(token, Token::While);
@@ -1003,7 +1038,8 @@ mod tests {
     }
     #[test]
     fn test_match_case() {
-        let mut lexer = Lexer::new("case");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("case", &mut str_table);
         // match case
         let token = lexer.match_case().unwrap();
         assert_eq!(token, Token::Case);
@@ -1014,7 +1050,8 @@ mod tests {
     }
     #[test]
     fn test_match_esac() {
-        let mut lexer = Lexer::new("esac");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("esac", &mut str_table);
         // match esac
         let token = lexer.match_esac().unwrap();
         assert_eq!(token, Token::Esac);
@@ -1025,7 +1062,8 @@ mod tests {
     }
     #[test]
     fn test_match_of() {
-        let mut lexer = Lexer::new("of");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("of", &mut str_table);
         // match of
         let token = lexer.match_of().unwrap();
         assert_eq!(token, Token::Of);
@@ -1036,7 +1074,8 @@ mod tests {
     }
     #[test]
     fn test_match_new() {
-        let mut lexer = Lexer::new("new");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("new", &mut str_table);
         // match new
         let token = lexer.match_new().unwrap();
         assert_eq!(token, Token::New);
@@ -1047,7 +1086,8 @@ mod tests {
     }
     #[test]
     fn test_match_isvoid() {
-        let mut lexer = Lexer::new("isvoid");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("isvoid", &mut str_table);
         // match isvoid
         let token = lexer.match_isvoid().unwrap();
         assert_eq!(token, Token::IsVoid);
@@ -1058,7 +1098,8 @@ mod tests {
     }
     #[test]
     fn test_match_bool_const() {
-        let mut lexer = Lexer::new("false true");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("false true", &mut str_table);
         // match false
         let mut token = lexer.match_bool_const().unwrap();
         assert_eq!(token, Token::BoolConst(false));
@@ -1074,7 +1115,8 @@ mod tests {
     }
     #[test]
     fn test_match_not() {
-        let mut lexer = Lexer::new("not");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("not", &mut str_table);
         // match not
         let token = lexer.match_not().unwrap();
         assert_eq!(token, Token::Not);
@@ -1085,7 +1127,8 @@ mod tests {
     }
     #[test]
     fn test_try_match_word_ignore_case() {
-        let mut lexer = Lexer::new("woRd LaTex sOme");
+        let mut str_table = StrTable::new();
+        let mut lexer = Lexer::new("woRd LaTex sOme", &mut str_table);
         // match word
         let pos = lexer.try_match_word_ignore_case("word").unwrap();
         assert_eq!(pos, 4);

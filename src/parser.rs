@@ -2,13 +2,13 @@ use std::error::Error;
 
 use crate::ast::{Branch, Class, Expression, Feature, Formal, Program};
 use crate::lexer::Token;
-use crate::string_table::SharedString;
+use crate::string_table::{SharedString, StrTable};
 
 pub(crate) struct Parser {
     tokens: Vec<(usize, Token)>,
     pos: usize,
-    self_type: SharedString,
     object_type: SharedString,
+    self_type: SharedString,
 }
 
 const fn precedence(token: &Token) -> u8 {
@@ -67,28 +67,12 @@ impl std::fmt::Display for ParseError {
 type Result<T> = std::result::Result<T, ParseError>;
 
 impl Parser {
-    pub(crate) fn new<'a>(token_iter: impl Iterator<Item = (usize, Token)> + 'a) -> Parser {
-        // if tokens contains SELF_TYPE assign it to the self_type field
-        let tokens: Vec<(usize, Token)> = token_iter.collect();
-        let self_type = match tokens.iter().find(|(_, token)| match token {
-            Token::TypeId(t) if t == "SELF_TYPE" => true,
-            _ => false,
-        }) {
-            Some((_, Token::TypeId(t))) => t.clone(),
-            _ => SharedString::new("SELF_TYPE"),
-        };
-        let object_type = match tokens.iter().find(|(_, token)| match token {
-            Token::TypeId(t) if t == "Object" => true,
-            _ => false,
-        }) {
-            Some((_, Token::TypeId(t))) => t.clone(),
-            _ => SharedString::new("Object"),
-        };
+    pub(crate) fn new(tokens: Vec<(usize, Token)>, str_table: &mut StrTable) -> Self {
         Parser {
             tokens,
             pos: 0,
-            self_type,
-            object_type,
+            object_type: str_table.insert("Object"),
+            self_type: str_table.insert("SELF_TYPE"),
         }
     }
     fn peek(&self) -> &Token {
@@ -1083,8 +1067,9 @@ mod tests {
         ];
         for src in srcs {
             let text = read_to_string(format!("{PATH}/src/{src}.cl")).unwrap();
-            let iter = Lexer::lex(&text);
-            let mut parser = Parser::new(iter);
+            let mut str_table = StrTable::new();
+            let tokens = Lexer::lex(&text, &mut str_table).collect();
+            let mut parser = Parser::new(tokens, &mut str_table);
             let result = match src {
                 "program" => parser.parse_program().unwrap().to_string(),
                 "if" => parser.parse_if().unwrap().to_string(),
@@ -1107,8 +1092,9 @@ mod tests {
     #[test]
     fn test_parse_program() {
         let text = read_to_string(format!("{PATH}/src/program.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_program().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/program.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1116,8 +1102,9 @@ mod tests {
     #[test]
     fn test_parse_if() {
         let text = read_to_string(format!("{PATH}/src/if.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_if().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/if.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1125,8 +1112,9 @@ mod tests {
     #[test]
     fn test_parse_block() {
         let text = read_to_string(format!("{PATH}/src/block.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_block().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/block.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1134,8 +1122,9 @@ mod tests {
     #[test]
     fn test_parse_while() {
         let text = read_to_string(format!("{PATH}/src/while.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_while().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/while.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1143,8 +1132,9 @@ mod tests {
     #[test]
     fn test_parse_let() {
         let text = read_to_string(format!("{PATH}/src/let.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_let().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/let.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1152,8 +1142,9 @@ mod tests {
     #[test]
     fn test_parse_method() {
         let text = read_to_string(format!("{PATH}/src/method.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_method().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/method.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1161,8 +1152,9 @@ mod tests {
     #[test]
     fn test_parse_case() {
         let text = read_to_string(format!("{PATH}/src/case.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_case().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/case.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1170,8 +1162,9 @@ mod tests {
     #[test]
     fn test_parse_attribute() {
         let text = read_to_string(format!("{PATH}/src/attribute.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_attribute().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/attribute.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1179,8 +1172,9 @@ mod tests {
     #[test]
     fn test_parse_class() {
         let text = read_to_string(format!("{PATH}/src/class.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_class().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/class.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1188,8 +1182,9 @@ mod tests {
     #[test]
     fn test_parse_feature() {
         let text = read_to_string(format!("{PATH}/src/feature.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_feature().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/feature.txt")).unwrap();
         assert_eq!(result, correct);
@@ -1197,8 +1192,9 @@ mod tests {
     #[test]
     fn test_parse_formal() {
         let text = read_to_string(format!("{PATH}/src/formal.cl")).unwrap();
-        let iter = Lexer::lex(&text);
-        let mut parser = Parser::new(iter);
+        let mut str_table = StrTable::new();
+        let tokens = Lexer::lex(&text, &mut str_table).collect();
+        let mut parser = Parser::new(tokens, &mut str_table);
         let result = parser.parse_formal().unwrap().to_string();
         let correct = read_to_string(format!("{PATH}/dst/formal.txt")).unwrap();
         assert_eq!(result, correct);

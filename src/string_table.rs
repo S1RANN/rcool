@@ -13,6 +13,16 @@ impl PartialEq<str> for SharedString {
         self.0.as_str() == other
     }
 }
+impl PartialEq<String> for SharedString {
+    fn eq(&self, other: &String) -> bool {
+        self.0.as_str() == other.as_str()
+    }
+}
+impl PartialEq<&str> for SharedString {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.as_str() == *other
+    }
+}
 impl Hash for SharedString {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
@@ -49,7 +59,10 @@ pub(crate) struct StrTable(HashSet<SharedString>);
 
 impl StrTable {
     pub(crate) fn new() -> Self {
-        StrTable(HashSet::new())
+        let mut str_table = StrTable(HashSet::new());
+        str_table.insert("Object");
+        str_table.insert("SELF_TYPE");
+        str_table
     }
     pub(crate) fn insert(&mut self, s: &str) -> SharedString {
         if !self.0.contains(s) {
@@ -59,5 +72,8 @@ impl StrTable {
         } else {
             self.0.get(s).unwrap().clone()
         }
+    }
+    pub(crate) fn get(&self, s: &str) -> Option<SharedString>{
+        self.0.get(s).cloned()
     }
 }

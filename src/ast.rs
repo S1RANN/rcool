@@ -49,23 +49,7 @@ pub(crate) enum Expression {
     IntLiteral(SharedString),
     StringLiteral(SharedString),
     BoolLiteral(bool),
-}
-
-enum ExpressionPrime {
-    Dispatch {
-        as_type: SharedString,
-        method_ident: SharedString,
-        params: Vec<Expression>,
-        prime: Box<ExpressionPrime>,
-    },
-    Plus(Box<Expression>, Box<ExpressionPrime>),
-    Subtract(Box<Expression>, Box<ExpressionPrime>),
-    Multiply(Box<Expression>, Box<ExpressionPrime>),
-    Divide(Box<Expression>, Box<ExpressionPrime>),
-    Less(Box<Expression>, Box<ExpressionPrime>),
-    LessEqual(Box<Expression>, Box<ExpressionPrime>),
-    Equal(Box<Expression>, Box<ExpressionPrime>),
-    Nil,
+    NoExpr,
 }
 
 trait TreeFormat {
@@ -588,6 +572,7 @@ impl TreeFormat for Expression {
                 vec![format!("StringLiteral: \"{}\"", s.replace('\n', "\\n"))]
             }
             Expression::BoolLiteral(b) => vec![format!("BoolLiteral: {b}")],
+            Expression::NoExpr => vec!["NoExpr".to_string()],
         }
     }
 }

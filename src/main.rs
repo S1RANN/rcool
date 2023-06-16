@@ -1,5 +1,6 @@
 use lexer::Lexer;
 use parser::Parser;
+use string_table::StrTable;
 use std::{
     fs::read_to_string,
     io::{Error, ErrorKind},
@@ -18,8 +19,9 @@ fn main() -> Result<(), Error> {
 
     let text = read_to_string(path)?;
 
-    let iter = Lexer::lex(&text);
-    let mut parser = Parser::new(iter);
+    let mut str_table = StrTable::new();
+    let tokens = Lexer::lex(&text, &mut str_table).collect();
+    let mut parser = Parser::new(tokens, &mut str_table);
 
     let ast = parser.parse_program().unwrap();
 
