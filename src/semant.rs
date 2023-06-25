@@ -59,18 +59,18 @@ impl<'a> ClassNode<'a> {
     }
 }
 
-impl<'a> Analyzer<'a> {
-    fn new(ast: &'a Program, str_table: &mut StrTable) -> Self {
-        let primitive = Primitive {
-            object: str_table.insert("Object"),
-            int: str_table.insert("Int"),
-            string: str_table.insert("String"),
-            bool: str_table.insert("Bool"),
-            self_type: str_table.insert("SELF_TYPE"),
+impl Primitive {
+    fn new(str_table: &mut StrTable) -> Self {
+        Primitive {
+            object: str_table.insert("object"),
+            int: str_table.insert("int"),
+            string: str_table.insert("string"),
+            bool: str_table.insert("bool"),
+            self_type: str_table.insert("self_type"),
             abort: str_table.insert("abort"),
             type_name: str_table.insert("type_name"),
             copy: str_table.insert("copy"),
-            io: str_table.insert("IO"),
+            io: str_table.insert("io"),
             out_string: str_table.insert("out_string"),
             out_int: str_table.insert("out_int"),
             in_string: str_table.insert("in_string"),
@@ -82,15 +82,20 @@ impl<'a> Analyzer<'a> {
             str_field: str_table.insert("_str_field"),
             no_class: str_table.insert("__no_class__"),
             prim_slot: str_table.insert("__prim_slot__"),
-        };
+        }
+    }
+}
+
+impl<'a> Analyzer<'a> {
+    pub(crate) fn new(ast: &'a Program, primitive: Primitive) -> Self {
         Analyzer {
             ast,
             classes: HashMap::new(),
-            primitive,
+            primitive
         }
     }
 
-    fn add_primitive(self, ast: &mut Program) -> Result<(), AnalyticalError> {
+    fn add_primitive(ast: &mut Program, primitive: &Primitive) -> Result<(), AnalyticalError> {
         for class in ast.0.iter() {
             if class.name == "Object"
                 || class.name == "Int"
@@ -102,111 +107,111 @@ impl<'a> Analyzer<'a> {
         }
 
         let object_class = Class {
-            name: self.primitive.object.clone(),
-            parent: self.primitive.no_class.clone(),
+            name: primitive.object.clone(),
+            parent: primitive.no_class.clone(),
             features: vec![
                 Feature::Method {
-                    ident: self.primitive.abort.clone(),
+                    ident: primitive.abort.clone(),
                     formals: vec![],
-                    return_type: self.primitive.object.clone(),
+                    return_type: primitive.object.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.type_name.clone(),
+                    ident: primitive.type_name.clone(),
                     formals: vec![],
-                    return_type: self.primitive.string.clone(),
+                    return_type: primitive.string.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.copy.clone(),
+                    ident: primitive.copy.clone(),
                     formals: vec![],
-                    return_type: self.primitive.self_type.clone(),
+                    return_type: primitive.self_type.clone(),
                     body: Expression::NoExpr,
                 },
             ],
         };
 
         let io_class = Class {
-            name: self.primitive.io.clone(),
-            parent: self.primitive.object.clone(),
+            name: primitive.io.clone(),
+            parent: primitive.object.clone(),
             features: vec![
                 Feature::Method {
-                    ident: self.primitive.out_string.clone(),
+                    ident: primitive.out_string.clone(),
                     formals: vec![],
-                    return_type: self.primitive.self_type.clone(),
+                    return_type: primitive.self_type.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.out_int.clone(),
+                    ident: primitive.out_int.clone(),
                     formals: vec![],
-                    return_type: self.primitive.self_type.clone(),
+                    return_type: primitive.self_type.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.in_string.clone(),
+                    ident: primitive.in_string.clone(),
                     formals: vec![],
-                    return_type: self.primitive.string.clone(),
+                    return_type: primitive.string.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.in_int.clone(),
+                    ident:primitive.in_int.clone(),
                     formals: vec![],
-                    return_type: self.primitive.int.clone(),
+                    return_type: primitive.int.clone(),
                     body: Expression::NoExpr,
                 },
             ],
         };
 
         let int_class = Class {
-            name: self.primitive.int.clone(),
-            parent: self.primitive.object.clone(),
+            name: primitive.int.clone(),
+            parent: primitive.object.clone(),
             features: vec![Feature::Attribute {
-                ident: self.primitive.val.clone(),
-                ident_type: self.primitive.prim_slot.clone(),
+                ident: primitive.val.clone(),
+                ident_type: primitive.prim_slot.clone(),
                 init: None,
             }],
         };
 
         let bool_class = Class {
-            name: self.primitive.bool.clone(),
-            parent: self.primitive.object.clone(),
+            name: primitive.bool.clone(),
+            parent: primitive.object.clone(),
             features: vec![Feature::Attribute {
-                ident: self.primitive.val.clone(),
-                ident_type: self.primitive.prim_slot.clone(),
+                ident: primitive.val.clone(),
+                ident_type: primitive.prim_slot.clone(),
                 init: None,
             }],
         };
 
         let string_class = Class {
-            name: self.primitive.string.clone(),
-            parent: self.primitive.object.clone(),
+            name: primitive.string.clone(),
+            parent: primitive.object.clone(),
             features: vec![
                 Feature::Attribute {
-                    ident: self.primitive.val.clone(),
-                    ident_type: self.primitive.prim_slot.clone(),
+                    ident: primitive.val.clone(),
+                    ident_type: primitive.prim_slot.clone(),
                     init: None,
                 },
                 Feature::Attribute {
-                    ident: self.primitive.str_field.clone(),
-                    ident_type: self.primitive.prim_slot.clone(),
+                    ident: primitive.str_field.clone(),
+                    ident_type: primitive.prim_slot.clone(),
                     init: None,
                 },
                 Feature::Method {
-                    ident: self.primitive.length.clone(),
+                    ident: primitive.length.clone(),
                     formals: vec![],
-                    return_type: self.primitive.int.clone(),
+                    return_type: primitive.int.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.concat.clone(),
+                    ident: primitive.concat.clone(),
                     formals: vec![],
-                    return_type: self.primitive.string.clone(),
+                    return_type: primitive.string.clone(),
                     body: Expression::NoExpr,
                 },
                 Feature::Method {
-                    ident: self.primitive.substr.clone(),
+                    ident: primitive.substr.clone(),
                     formals: vec![],
-                    return_type: self.primitive.string.clone(),
+                    return_type: primitive.string.clone(),
                     body: Expression::NoExpr,
                 },
             ],
@@ -242,6 +247,19 @@ impl<'a> Analyzer<'a> {
             }
         }
 
+        let mut visited = HashMap::new();
+        let mut rec = HashMap::new();
+        for class in self.classes.keys() {
+            visited.insert(class.clone(), false);
+            rec.insert(class.clone(), false);
+        }
+
+        for class in self.classes.keys() {
+            if !visited[class] && self.has_cycle(class, &mut visited, &mut rec) {
+                return Err(AnalyticalError::CyclicInheritance);
+            }
+        }
+
         Ok(())
     }
 
@@ -250,9 +268,31 @@ impl<'a> Analyzer<'a> {
         node: &SharedString,
         visited: &mut HashMap<SharedString, bool>,
         rec: &mut HashMap<SharedString, bool>,
-    ) {
+    ) -> bool {
         *visited.get_mut(node).unwrap() = true;
-        rec[node] = true;
+        *rec.get_mut(node).unwrap() = true;
 
+        let class = self.classes.get(node).unwrap();
+        if class.parent != self.primitive.no_class {
+            if !visited[&class.parent] && self.has_cycle(&class.parent, visited, rec) {
+                return true;
+            } else if rec[&class.parent] {
+                return true;
+            }
+        }
+
+        *rec.get_mut(node).unwrap() = false;
+
+        false
+    }
+
+    fn analyze(ast: &mut Program, str_table: &mut StrTable) -> Result<(), AnalyticalError> {
+        let primitive = Primitive::new(str_table);
+        Self::add_primitive(ast, &primitive)?;
+        let mut analyzer = Analyzer::new(ast, primitive);
+        analyzer.build_inheritance()?;
+        analyzer.check_inheritance()?;
+        
+        Ok(())
     }
 }
